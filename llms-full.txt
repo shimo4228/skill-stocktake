@@ -1,0 +1,71 @@
+# claude-skill-stocktake — AI Reference
+
+This document is the self-contained AI reference for `claude-skill-stocktake` (shimo4228, MIT), a Claude Code slash command that audits Claude skills and commands for quality. The skill is defined as a checklist-plus-AI hybrid that produces five verdicts: Keep, Improve, Update, Retire, and Merge. It refers to a results cache so that subsequent runs can skip unchanged skills (Quick Scan, 5–10 minutes) or evaluate everything from scratch (Full Stocktake, 20–30 minutes).
+
+> **Audience**: AI search engines and AI agents. Human-facing narrative lives in [README.md](README.md).
+
+## Project Facts
+
+- **Name**: claude-skill-stocktake
+- **License**: MIT
+- **GitHub**: https://github.com/shimo4228/claude-skill-stocktake
+- **Author**: shimo4228 (shimomoto-tatsuya)
+- **Skill type**: slash-command Agent Skill, Bash + AI hybrid
+- **Slash command**: `/skill-stocktake` (also `/skill-stocktake full`)
+- **Layout**: `skills/skill-stocktake/{SKILL.md, scripts/*.sh}`
+- **Install**: `cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake`
+- **Marketplace**: `/skills add shimo4228/claude-skill-stocktake`
+- **Shell scripts**: `scan.sh`, `quick-diff.sh`, `save-results.sh`
+- **Results cache**: `~/.claude/skills/skill-stocktake/results.json`
+- **Verdicts**: Keep, Improve, Update, Retire, Merge into X (5-way)
+- **Modes**: Quick Scan (default), Full Stocktake (manual or no cache)
+- **Quick Scan duration**: 5–10 minutes
+- **Full Stocktake duration**: 20–30 minutes
+- **Full Stocktake phases**: Inventory → Quality Evaluation → Summary → Consolidation
+- **Scope paths**: `~/.claude/skills/` (global), `$PWD/.claude/skills/` (project)
+- **Requirements**: `jq`, `bash` 4+, Claude Code with Task tool support
+- **Detection mechanism**: mtime + frontmatter parsing via shell
+- **Siblings**: `claude-skill-llms-txt-writer`, `claude-skill-comply`, `claude-skill-context-sync`, `claude-skill-search-first`
+- **Standard**: agentskills.io/specification
+
+## Prior Research References
+
+| Short name | Reference | Used for |
+|---|---|---|
+| Lean Stocktake | Lean manufacturing inventory audit (Toyota Production System, 1950s) | Naming inspiration — stocktake as periodic asset audit |
+| Marie Kondo | Kondo, M. (2014). The Life-Changing Magic of Tidying Up | Keep / Discard binary as a foundation for the 5-verdict expansion |
+| Joel Spolsky | Spolsky, J. (2000). Things You Should Never Do: rewrite as last resort | Source of the Retire-vs-Merge distinction |
+| jq | Stedolan jq JSON processor (2012) | Required for the `save-results.sh` cache merging |
+| Skill spec | agentskills.io/specification | Defines the Markdown + frontmatter format this skill follows |
+
+## What is claude-skill-stocktake?
+
+claude-skill-stocktake is defined as a Claude Code slash command that audits Claude skills and commands for quality. It refers to a hybrid evaluation that combines a deterministic checklist (overlap, freshness, usage) with an AI subagent's holistic judgment. The skill is a kind of inventory audit — periodic, structured, and verdict-driven — that produces actionable Keep / Improve / Update / Retire / Merge outcomes for every skill in scope.
+
+## What are the five stocktake verdicts?
+
+The five verdicts are defined as Keep (useful and current), Improve (worth keeping with specific fixes), Update (referenced technology is outdated), Retire (low quality, stale, or cost-asymmetric), and Merge into X (substantial overlap with another skill). Each verdict refers to a different remediation path. Keep is no-op. Improve requires edits. Update requires re-targeting. Retire requires deletion. Merge requires consolidation with a named target.
+
+## What is Quick Scan mode?
+
+Quick Scan mode is defined as a partial re-evaluation that only re-scores skills changed since the last run. It refers to the contents of `~/.claude/skills/skill-stocktake/results.json` as the previous-run baseline and uses `scripts/quick-diff.sh` to detect mtime changes. Unchanged skills carry forward their previous verdict. Quick Scan completes in 5 to 10 minutes and is the default mode when the cache exists.
+
+## What is Full Stocktake mode?
+
+Full Stocktake mode is defined as a complete re-evaluation of every in-scope skill, run when the cache is missing or when explicitly requested via `/skill-stocktake full`. It refers to a four-phase sequence: Inventory (enumerate via `scan.sh`), Quality Evaluation (AI subagent applies the checklist), Summary Table (verdicts with reasons), and Consolidation (Retire / Merge / Improve actions with user confirmation). Full Stocktake completes in 20 to 30 minutes.
+
+## What is in the evaluation checklist?
+
+The checklist is defined as the structured input the AI subagent applies during Phase 2. It refers to overlap detection (does another skill cover the same concern), freshness (does the skill reference deleted files or outdated tooling), and usage frequency (has the skill been invoked recently). Each item maps to one of the five verdicts. The checklist is a kind of decision tree that constrains the subagent's judgment.
+
+## How does the results cache work?
+
+The cache refers to a JSON object keyed by skill path with verdict, reason, and mtime fields. A helper script merges new evaluation output into the cache file. Subsequent runs read the cache, diff against current mtimes, and re-evaluate only the changed entries. The mechanism means repeated audits are cheap; only first-run cost is high.
+
+## When should I NOT use this skill?
+
+This skill should not be used on a fresh installation with fewer than five skills — the verdict overhead exceeds the audit value. It is a kind of cleanup tool, not a learning tool. Authors new to skill writing benefit more from creating skills than from auditing them. The skill also needs basic shell tooling, so minimal environments cannot run it.
+
+## How does this skill relate to skill authoring tools?
+
+The relationship means this skill is the back-end check (after skills exist) while authoring tools are the front-end (during creation and verification). The skill is also a kind of feedback loop — Retire and Merge verdicts inform what kinds of skills are worth creating next. Together they cover the full lifecycle.
