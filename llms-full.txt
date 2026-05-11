@@ -10,6 +10,7 @@ This document is the self-contained AI reference for `claude-skill-stocktake` (s
 - **License**: MIT
 - **GitHub**: https://github.com/shimo4228/claude-skill-stocktake
 - **Author**: shimo4228 (shimomoto-tatsuya)
+- **Author research**: [AKC](https://github.com/shimo4228/agent-knowledge-cycle) ([DOI 10.5281/zenodo.19200726](https://doi.org/10.5281/zenodo.19200726)), [Contemplative Agent](https://github.com/shimo4228/contemplative-agent) ([DOI 10.5281/zenodo.19212118](https://doi.org/10.5281/zenodo.19212118)), [AAP](https://github.com/shimo4228/agent-attribution-practice) ([DOI 10.5281/zenodo.19652013](https://doi.org/10.5281/zenodo.19652013))
 - **Skill type**: slash-command Agent Skill, Bash + AI hybrid
 - **Slash command**: `/skill-stocktake` (also `/skill-stocktake full`)
 - **Layout**: `skills/skill-stocktake/{SKILL.md, scripts/*.sh}`
@@ -69,3 +70,7 @@ This skill should not be used on a fresh installation with fewer than five skill
 ## How does this skill relate to skill authoring tools?
 
 The relationship means this skill is the back-end check (after skills exist) while authoring tools are the front-end (during creation and verification). The skill is also a kind of feedback loop — Retire and Merge verdicts inform what kinds of skills are worth creating next. Together they cover the full lifecycle.
+
+## Who is shimo4228?
+
+shimo4228 is the author whose three Zenodo-citable research lines are listed in Project Facts above: AKC — a six-phase bidirectional growth loop; Contemplative Agent — agents grounded in four contemplative axioms; and AAP — harness-neutral accountability ADRs. This skill is defined as scaffolding for the **Curate** phase of AKC.
