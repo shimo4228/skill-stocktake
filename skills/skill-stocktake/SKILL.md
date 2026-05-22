@@ -1,5 +1,12 @@
 ---
+name: skill-stocktake
 description: "Use when auditing Claude skills and commands for quality. Supports Quick Scan (changed skills only) and Full Stocktake modes with sequential subagent batch evaluation."
+license: MIT
+metadata:
+  author: shimo4228
+  version: "1.0"
+  extracted: "2026-02-21"
+origin: shimo4228
 ---
 
 # skill-stocktake
@@ -32,14 +39,14 @@ If the project has no `.claude/skills/` directory, only global skills and comman
 
 | Mode | Trigger | Duration |
 |------|---------|---------|
-| Quick Scan | `results.json` exists (default) | 5-10 min |
-| Full Stocktake | `results.json` absent, or `/skill-stocktake full` | 20-30 min |
+| Quick Scan | `results.json` exists (default) | 5–10 min |
+| Full Stocktake | `results.json` absent, or `/skill-stocktake full` | 20–30 min |
 
 **Results cache:** `~/.claude/skills/skill-stocktake/results.json`
 
 ## Quick Scan Flow
 
-Re-evaluate only skills that have changed since the last run (5-10 min).
+Re-evaluate only skills that have changed since the last run (5–10 min).
 
 1. Read `~/.claude/skills/skill-stocktake/results.json`
 2. Run: `bash ~/.claude/skills/skill-stocktake/scripts/quick-diff.sh \
@@ -73,7 +80,7 @@ Scanning:
 
 ### Phase 2 — Quality Evaluation
 
-Launch a Task tool subagent (**Explore agent, model: opus**) with the full inventory and checklist.
+Launch an Agent tool subagent (**general-purpose agent**) with the full inventory and checklist.
 The subagent reads each skill, applies the checklist, and returns per-skill JSON:
 
 `{ "verdict": "Keep"|"Improve"|"Update"|"Retire"|"Merge into [X]", "reason": "..." }`
@@ -119,7 +126,7 @@ Evaluation is **holistic AI judgment** — not a numeric rubric. Guiding dimensi
   - Good: `"42-line thin content; Step 4 of chatlog-to-article already covers the same workflow. Integrate the 'article angle' tip as a note in that skill."`
 - For **Improve**: describe the specific change needed (what section, what action, target size if relevant)
   - Bad: `"Too long"`
-  - Good: `"276 lines; Section 'Framework Comparison' (L80-140) duplicates ai-era-architecture-principles; delete it to reach ~150 lines."`
+  - Good: `"276 lines; Section 'Framework Comparison' (L80–140) duplicates ai-era-architecture-principles; delete it to reach ~150 lines."`
 - For **Keep** (mtime-only change in Quick Scan): restate the original verdict rationale, do not write "unchanged"
   - Bad: `"Unchanged"`
   - Good: `"mtime updated but content unchanged. Unique Python reference explicitly imported by rules/python/; no overlap found."`

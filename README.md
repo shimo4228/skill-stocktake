@@ -60,7 +60,7 @@ Re-evaluates only skills that changed since the last run. Uses `scripts/quick-di
 
 - `jq` (JSON processing)
 - `bash` 4+
-- Claude Code with Task tool support (for AI evaluation)
+- Claude Code with Agent tool support (for AI evaluation)
 
 ## About this skill
 

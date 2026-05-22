@@ -24,7 +24,7 @@ This document is the self-contained AI reference for `claude-skill-stocktake` (s
 - **Full Stocktake duration**: 20–30 minutes
 - **Full Stocktake phases**: Inventory → Quality Evaluation → Summary → Consolidation
 - **Scope paths**: `~/.claude/skills/` (global), `$PWD/.claude/skills/` (project)
-- **Requirements**: `jq`, `bash` 4+, Claude Code with Task tool support
+- **Requirements**: `jq`, `bash` 4+, Claude Code with Agent tool support
 - **Detection mechanism**: mtime + frontmatter parsing via shell
 - **Siblings**: `claude-skill-llms-txt-writer`, `claude-skill-comply`, `claude-skill-context-sync`, `claude-skill-search-first`, `claude-skill-rules-distill`, `claude-skill-learn-eval`, `claude-skill-daily-research`
 - **Standard**: agentskills.io/specification
