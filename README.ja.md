@@ -60,7 +60,7 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 
 - `jq`（JSON 処理）
 - `bash` 4 以上
-- Task ツールをサポートする Claude Code（AI 評価に使用）
+- Agent ツールをサポートする Claude Code（AI 評価に使用）
 
 ## このスキルについて
 
