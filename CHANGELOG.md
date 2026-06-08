@@ -34,8 +34,8 @@ The skill assumes Claude Code's `~/.claude/skills/` (global) and `$PWD/.claude/s
 
 | Skill | Role | When |
 |---|---|---|
-| [`claude-skill-search-first`](https://github.com/shimo4228/claude-skill-search-first) | Research before coding | Earlier phase of the AKC knowledge lifecycle |
-| [`claude-skill-learn-eval`](https://github.com/shimo4228/claude-skill-learn-eval) | Per-session pattern extraction with quality gate | Later phase — feeds new patterns after stocktake clears retired entries |
-| [`claude-skill-rules-distill`](https://github.com/shimo4228/claude-skill-rules-distill) | Promote cross-cutting principles to rules | Final phase of the lifecycle |
+| [`search-first`](https://github.com/shimo4228/search-first) | Research before coding | Earlier phase of the AKC knowledge lifecycle |
+| [`learn-eval`](https://github.com/shimo4228/learn-eval) | Per-session pattern extraction with quality gate | Later phase — feeds new patterns after stocktake clears retired entries |
+| [`rules-distill`](https://github.com/shimo4228/rules-distill) | Promote cross-cutting principles to rules | Final phase of the lifecycle |
 
 This skill implements the **Curate** phase of the [Agent Knowledge Cycle (AKC)](https://github.com/shimo4228/agent-knowledge-cycle) — a Zenodo-citable six-phase bidirectional growth loop for sustaining intent alignment between an AI agent and its operator over time.

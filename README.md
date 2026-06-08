@@ -1,6 +1,6 @@
 Language: English | [日本語](README.ja.md)
 
-# claude-skill-stocktake
+# skill-stocktake
 
 An [Agent Skill](https://agentskills.io/specification) that audits all your Claude skills and commands for quality. Uses a checklist + AI holistic judgment to produce Keep / Improve / Update / Retire / Merge verdicts.
 
@@ -16,7 +16,7 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 ### SkillsMP
 
 ```bash
-/skills add shimo4228/claude-skill-stocktake
+/skills add shimo4228/skill-stocktake
 ```
 
 ## Modes

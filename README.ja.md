@@ -1,6 +1,6 @@
 Language: [English](README.md) | 日本語
 
-# claude-skill-stocktake
+# skill-stocktake
 
 Claude のスキルとコマンドの品質を監査する [Agent Skill](https://agentskills.io/specification) です。チェックリスト + AI の総合判断により、Keep / Improve / Update / Retire / Merge の判定を出します。
 
@@ -16,7 +16,7 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 ### SkillsMP
 
 ```bash
-/skills add shimo4228/claude-skill-stocktake
+/skills add shimo4228/skill-stocktake
 ```
 
 ## モード

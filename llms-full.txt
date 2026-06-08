@@ -1,21 +1,21 @@
-# claude-skill-stocktake — AI Reference
+# skill-stocktake — AI Reference
 
-This document is the self-contained AI reference for `claude-skill-stocktake` (shimo4228, MIT), a Claude Code slash command that audits Claude skills and commands for quality. The skill is defined as a checklist-plus-AI hybrid that produces five verdicts: Keep, Improve, Update, Retire, and Merge. It refers to a results cache so that subsequent runs can skip unchanged skills (Quick Scan, 5–10 minutes) or evaluate everything from scratch (Full Stocktake, 20–30 minutes).
+This document is the self-contained AI reference for `skill-stocktake` (shimo4228, MIT), a Claude Code slash command that audits Claude skills and commands for quality. The skill is defined as a checklist-plus-AI hybrid that produces five verdicts: Keep, Improve, Update, Retire, and Merge. It refers to a results cache so that subsequent runs can skip unchanged skills (Quick Scan, 5–10 minutes) or evaluate everything from scratch (Full Stocktake, 20–30 minutes).
 
 > **Audience**: AI search engines and AI agents. Human-facing narrative lives in [README.md](README.md).
 
 ## Project Facts
 
-- **Name**: claude-skill-stocktake
+- **Name**: skill-stocktake
 - **License**: MIT
-- **GitHub**: https://github.com/shimo4228/claude-skill-stocktake
+- **GitHub**: https://github.com/shimo4228/skill-stocktake
 - **Author**: shimo4228 (shimomoto-tatsuya)
 - **Author research**: [AKC](https://github.com/shimo4228/agent-knowledge-cycle) ([DOI 10.5281/zenodo.19200726](https://doi.org/10.5281/zenodo.19200726)), [Contemplative Agent](https://github.com/shimo4228/contemplative-agent) ([DOI 10.5281/zenodo.19212118](https://doi.org/10.5281/zenodo.19212118)), [AAP](https://github.com/shimo4228/agent-attribution-practice) ([DOI 10.5281/zenodo.19652013](https://doi.org/10.5281/zenodo.19652013))
 - **Skill type**: slash-command Agent Skill, Bash + AI hybrid
 - **Slash command**: `/skill-stocktake` (also `/skill-stocktake full`)
 - **Layout**: `skills/skill-stocktake/{SKILL.md, scripts/*.sh}`
 - **Install**: `cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake`
-- **Marketplace**: `/skills add shimo4228/claude-skill-stocktake`
+- **Marketplace**: `/skills add shimo4228/skill-stocktake`
 - **Shell scripts**: `scan.sh`, `quick-diff.sh`, `save-results.sh`
 - **Results cache**: `~/.claude/skills/skill-stocktake/results.json`
 - **Verdicts**: Keep, Improve, Update, Retire, Merge into X (5-way)
@@ -26,7 +26,7 @@ This document is the self-contained AI reference for `claude-skill-stocktake` (s
 - **Scope paths**: `~/.claude/skills/` (global), `$PWD/.claude/skills/` (project)
 - **Requirements**: `jq`, `bash` 4+, Claude Code with Agent tool support
 - **Detection mechanism**: mtime + frontmatter parsing via shell
-- **Siblings**: `claude-skill-llms-txt-writer`, `claude-skill-comply`, `claude-skill-context-sync`, `claude-skill-search-first`, `claude-skill-rules-distill`, `claude-skill-learn-eval`, `claude-skill-daily-research`
+- **Siblings**: `llms-txt-writer`, `skill-comply`, `context-sync`, `search-first`, `rules-distill`, `learn-eval`, `daily-research`
 - **Standard**: agentskills.io/specification
 
 ## Prior Research References
@@ -39,9 +39,9 @@ This document is the self-contained AI reference for `claude-skill-stocktake` (s
 | jq | Stedolan jq JSON processor (2012) | Required for the `save-results.sh` cache merging |
 | Skill spec | agentskills.io/specification | Defines the Markdown + frontmatter format this skill follows |
 
-## What is claude-skill-stocktake?
+## What is skill-stocktake?
 
-claude-skill-stocktake is defined as a Claude Code slash command that audits Claude skills and commands for quality. It refers to a hybrid evaluation that combines a deterministic checklist (overlap, freshness, usage) with an AI subagent's holistic judgment. The skill is a kind of inventory audit — periodic, structured, and verdict-driven — that produces actionable Keep / Improve / Update / Retire / Merge outcomes for every skill in scope.
+skill-stocktake is defined as a Claude Code slash command that audits Claude skills and commands for quality. It refers to a hybrid evaluation that combines a deterministic checklist (overlap, freshness, usage) with an AI subagent's holistic judgment. The skill is a kind of inventory audit — periodic, structured, and verdict-driven — that produces actionable Keep / Improve / Update / Retire / Merge outcomes for every skill in scope.
 
 ## What are the five stocktake verdicts?
 
