@@ -1,6 +1,6 @@
 # skill-stocktake — AI Reference
 
-This document is the self-contained AI reference for `skill-stocktake` (shimo4228, MIT), a Claude Code slash command that audits Claude skills and commands for quality. The skill is defined as a checklist-plus-AI hybrid that produces five verdicts: Keep, Improve, Update, Retire, and Merge. It refers to a results cache so that subsequent runs can skip unchanged skills (Quick Scan, 5–10 minutes) or evaluate everything from scratch (Full Stocktake, 20–30 minutes).
+This document is the self-contained AI reference for `skill-stocktake` (shimo4228, MIT), a Claude Code slash command that audits installed Claude skills for quality. The skill produces five verdicts: Keep, Improve, Update, Retire, and Merge. It reads every installed skill into one context and applies holistic judgment — there are no scan scripts and no subagent batching, because a large context window makes a single-context audit both feasible and more accurate for cross-skill overlap detection.
 
 > **Audience**: AI search engines and AI agents. Human-facing narrative lives in [README.md](README.md).
 
@@ -11,22 +11,23 @@ This document is the self-contained AI reference for `skill-stocktake` (shimo422
 - **GitHub**: https://github.com/shimo4228/skill-stocktake
 - **Author**: shimo4228 (shimomoto-tatsuya)
 - **Author research**: [AKC](https://github.com/shimo4228/agent-knowledge-cycle) ([DOI 10.5281/zenodo.19200726](https://doi.org/10.5281/zenodo.19200726)), [Contemplative Agent](https://github.com/shimo4228/contemplative-agent) ([DOI 10.5281/zenodo.19212118](https://doi.org/10.5281/zenodo.19212118)), [AAP](https://github.com/shimo4228/agent-attribution-practice) ([DOI 10.5281/zenodo.19652013](https://doi.org/10.5281/zenodo.19652013))
-- **Skill type**: slash-command Agent Skill, Bash + AI hybrid
-- **Slash command**: `/skill-stocktake` (also `/skill-stocktake full`)
-- **Layout**: `skills/skill-stocktake/{SKILL.md, scripts/*.sh}`
+- **Skill type**: slash-command Agent Skill, AI-driven (no bundled scripts)
+- **Slash command**: `/skill-stocktake` (also `/skill-stocktake full`, `/skill-stocktake changed`)
+- **Layout**: `skills/skill-stocktake/SKILL.md` (single file — no `scripts/`)
 - **Install**: `cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake`
 - **Marketplace**: `/skills add shimo4228/skill-stocktake`
-- **Shell scripts**: `scan.sh`, `quick-diff.sh`, `save-results.sh`
-- **Results cache**: `~/.claude/skills/skill-stocktake/results.json`
 - **Verdicts**: Keep, Improve, Update, Retire, Merge into X (5-way)
-- **Modes**: Quick Scan (default), Full Stocktake (manual or no cache)
-- **Quick Scan duration**: 5–10 minutes
-- **Full Stocktake duration**: 20–30 minutes
-- **Full Stocktake phases**: Inventory → Quality Evaluation → Summary → Consolidation
+- **Modes**: full (default — evaluate every skill), changed (re-evaluate only skills changed since last run)
+- **Phases**: Inventory → Evaluation → Summary → Consolidation
+- **Inventory mechanism**: Glob over `~/.claude/skills/*/SKILL.md` and `learned/*.md`; `.venv` / `.pytest_cache` excluded structurally because Glob targets only skill definition files
+- **Evaluation mechanism**: fully inline — every skill body read into one main context; no subagent batching
+- **Change detection (changed mode)**: `SKILL.md` mtime vs the ledger's `evaluated_at`
+- **Ledger**: `~/.claude/skills/skill-stocktake/results.json` — lean `{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`, updated inline (no merge script)
+- **Improve/Update hand-off**: offered to `skill-creator` (the improvement engine); stocktake itself only audits
 - **Scope paths**: `~/.claude/skills/` (global), `$PWD/.claude/skills/` (project)
-- **Requirements**: `jq`, `bash` 4+, Claude Code with Agent tool support
-- **Detection mechanism**: mtime + frontmatter parsing via shell
-- **Siblings**: `llms-txt-writer`, `skill-comply`, `context-sync`, `search-first`, `rules-distill`, `learn-eval`, `daily-research`
+- **Requirements**: Claude Code with Glob/Read/Bash; `jq` and `python3` optional for inline one-liners
+- **Usage signal**: read inline from `~/.claude/metrics/skill-usage.jsonl` when a usage hook is installed; rendered as unmeasured (not 0) when the log spans under 90 days
+- **Siblings**: `skill-creator`, `llms-txt-writer`, `skill-comply`, `context-sync`, `search-first`, `rules-distill`, `learn-eval`
 - **Standard**: agentskills.io/specification
 
 ## Prior Research References
@@ -36,41 +37,45 @@ This document is the self-contained AI reference for `skill-stocktake` (shimo422
 | Lean Stocktake | Lean manufacturing inventory audit (Toyota Production System, 1950s) | Naming inspiration — stocktake as periodic asset audit |
 | Marie Kondo | Kondo, M. (2014). The Life-Changing Magic of Tidying Up | Keep / Discard binary as a foundation for the 5-verdict expansion |
 | Joel Spolsky | Spolsky, J. (2000). Things You Should Never Do: rewrite as last resort | Source of the Retire-vs-Merge distinction |
-| jq | Stedolan jq JSON processor (2012) | Required for the `save-results.sh` cache merging |
+| Progressive disclosure | Anthropic Agent Skills three-level loading model | Why the skill stays a single lean SKILL.md with no bundled scripts |
 | Skill spec | agentskills.io/specification | Defines the Markdown + frontmatter format this skill follows |
 
 ## What is skill-stocktake?
 
-skill-stocktake is defined as a Claude Code slash command that audits Claude skills and commands for quality. It refers to a hybrid evaluation that combines a deterministic checklist (overlap, freshness, usage) with an AI subagent's holistic judgment. The skill is a kind of inventory audit — periodic, structured, and verdict-driven — that produces actionable Keep / Improve / Update / Retire / Merge outcomes for every skill in scope.
+skill-stocktake is a Claude Code slash command that audits installed Claude skills for quality. It combines a structured checklist (content overlap, reference freshness, usage frequency) with an AI's holistic judgment, and produces an actionable Keep / Improve / Update / Retire / Merge verdict for every skill in scope. It is a periodic asset audit for a skill library — the **Curate** phase of the Agent Knowledge Cycle.
 
 ## What are the five stocktake verdicts?
 
-The five verdicts are defined as Keep (useful and current), Improve (worth keeping with specific fixes), Update (referenced technology is outdated), Retire (low quality, stale, or cost-asymmetric), and Merge into X (substantial overlap with another skill). Each verdict refers to a different remediation path. Keep is no-op. Improve requires edits. Update requires re-targeting. Retire requires deletion. Merge requires consolidation with a named target.
+Keep (useful and current), Improve (worth keeping with specific fixes), Update (referenced technology is outdated), Retire (low quality, stale, or cost-asymmetric), and Merge into X (substantial overlap with another skill). Each verdict maps to a remediation path: Keep is a no-op, Improve requires edits, Update requires re-targeting, Retire requires deletion, and Merge requires consolidation with a named target.
 
-## What is Quick Scan mode?
+## What are the modes — full and changed?
 
-Quick Scan mode is defined as a partial re-evaluation that only re-scores skills changed since the last run. It refers to the contents of `~/.claude/skills/skill-stocktake/results.json` as the previous-run baseline and uses `scripts/quick-diff.sh` to detect mtime changes. Unchanged skills carry forward their previous verdict. Quick Scan completes in 5 to 10 minutes and is the default mode when the cache exists.
+There are two modes. **full** (the default, or `/skill-stocktake full`) reads and evaluates every skill. **changed** (`/skill-stocktake changed`) re-evaluates only skills whose `SKILL.md` is newer than the ledger's `evaluated_at` timestamp, carrying the remaining verdicts forward from the ledger. There is no separate "quick scan" cache-diff script — change detection is a single inline `find -newermt` check.
 
-## What is Full Stocktake mode?
+## How does inventory work without a scan script?
 
-Full Stocktake mode is defined as a complete re-evaluation of every in-scope skill, run when the cache is missing or when explicitly requested via `/skill-stocktake full`. It refers to a four-phase sequence: Inventory (enumerate via `scan.sh`), Quality Evaluation (AI subagent applies the checklist), Summary Table (verdicts with reasons), and Consolidation (Retire / Merge / Improve actions with user confirmation). Full Stocktake completes in 20 to 30 minutes.
+The skill enumerates skill definition files with Glob: `~/.claude/skills/*/SKILL.md` plus `~/.claude/skills/learned/*.md`, and project skills under `$PWD/.claude/skills/` when present. Because the glob patterns match only skill definition files, dependency markdown inside `.venv`, `.pytest_cache`, or `node_modules` is excluded structurally — there is no need to prune those directories, and the old failure mode of counting a virtual-env LICENSE file as a "skill" cannot occur.
 
-## What is in the evaluation checklist?
+## Why fully inline, with no subagent batching?
 
-The checklist is defined as the structured input the AI subagent applies during Phase 2. It refers to overlap detection (does another skill cover the same concern), freshness (does the skill reference deleted files or outdated tooling), and usage frequency (has the skill been invoked recently). Each item maps to one of the five verdicts. The checklist is a kind of decision tree that constrains the subagent's judgment.
+Earlier designs split evaluation into batches of ~20 skills across separate subagents to fit small context windows. That is unnecessary with a large context window, and it is actively harmful for this task: a subagent that sees only its batch cannot detect overlap with skills in other batches. Reading every skill into one context is what makes cross-skill overlap detection accurate — and lets the skill correctly distinguish a genuine duplication from a documented orchestrator/sub-skill split (which is *not* overlap).
 
-## How does the results cache work?
+## How does the verdict ledger work?
 
-The cache refers to a JSON object keyed by skill path with verdict, reason, and mtime fields. A helper script merges new evaluation output into the cache file. Subsequent runs read the cache, diff against current mtimes, and re-evaluate only the changed entries. The mechanism means repeated audits are cheap; only first-run cost is high.
+The ledger is a lean JSON file, `~/.claude/skills/skill-stocktake/results.json`, shaped as `{evaluated_at, skills:{name:{path, verdict, reason, mtime}}}`. It records the last-audit timestamp and a verdict history. It is read and rewritten inline with the Read/Write tools — there is no merge script and no `batch_progress`/resume state. In changed mode, skills that were not re-evaluated keep their prior verdict.
+
+## How does it handle usage data, and the zero-usage rule?
+
+If a usage-logging hook is installed, the skill reads `~/.claude/metrics/skill-usage.jsonl` inline and counts per-skill events over 7 / 30 / 90 days. When the log spans fewer than 90 days, usage is rendered as unmeasured (`—`), never as 0 — unmeasured and unused are different facts. Only when the log is at least 90 days old does a `use_90d == 0` skill get surfaced as a Retire candidate; the final decision always stays with the operator.
+
+## How does this skill relate to skill-creator?
+
+skill-stocktake is the quality gate; [skill-creator](https://github.com/shimo4228/skill-creator) is the improvement engine. Stocktake audits and assigns verdicts but does not do the fixing — when it assigns Improve or Update, it offers to hand the skill off to skill-creator, which runs the draft → test → benchmark → iterate loop. This separation keeps the audit fast and origin-blind while concentrating editing work in the tool built for it.
 
 ## When should I NOT use this skill?
 
-This skill should not be used on a fresh installation with fewer than five skills — the verdict overhead exceeds the audit value. It is a kind of cleanup tool, not a learning tool. Authors new to skill writing benefit more from creating skills than from auditing them. The skill also needs basic shell tooling, so minimal environments cannot run it.
-
-## How does this skill relate to skill authoring tools?
-
-The relationship means this skill is the back-end check (after skills exist) while authoring tools are the front-end (during creation and verification). The skill is also a kind of feedback loop — Retire and Merge verdicts inform what kinds of skills are worth creating next. Together they cover the full lifecycle.
+Not on a fresh installation with only a handful of skills — the audit overhead exceeds the value. It is a cleanup/curation tool, not a learning tool; authors new to skill writing benefit more from creating skills than auditing them. It is also not a whole-configuration garbage collector (that is `config-gc`, which covers hooks, permissions, MCP servers, and caches), and not a single-skill authoring tool (that is `skill-creator`).
 
 ## Who is shimo4228?
 
-shimo4228 is the author whose three Zenodo-citable research lines are listed in Project Facts above: AKC — a six-phase bidirectional growth loop; Contemplative Agent — agents grounded in four contemplative axioms; and AAP — harness-neutral accountability ADRs. This skill is defined as scaffolding for the **Curate** phase of AKC.
+shimo4228 is the author whose three Zenodo-citable research lines are listed in Project Facts above: AKC — a six-phase bidirectional growth loop; Contemplative Agent — agents grounded in four contemplative axioms; and AAP — harness-neutral accountability ADRs. This skill is scaffolding for the **Curate** phase of AKC.

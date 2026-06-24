@@ -1,183 +1,147 @@
 ---
 name: skill-stocktake
-description: "Use when auditing Claude skills and commands for quality. Supports Quick Scan (changed skills only) and Full Stocktake modes with sequential subagent batch evaluation."
-compatibility: Developed and tested on Claude Code; portable to other Agent Skills-compatible agents.
+description: Audit installed Claude skills for quality and surface Keep/Improve/Update/Retire/Merge verdicts. Use when the user says "audit my skills", "stocktake", "review my skills", "which skills should I retire or merge", "do a quality pass over my skills", or "/skill-stocktake". NOT for creating or improving a single skill (that is skill-creator) and NOT for whole-config GC across hooks/permissions/MCP (that is config-gc).
 license: MIT
 metadata:
   author: shimo4228
-  version: "1.0"
+  version: "2.0"
   extracted: "2026-02-21"
 origin: shimo4228
 ---
 
-# skill-stocktake
+# skill-stocktake — Skill Quality Audit
 
-Slash command (`/skill-stocktake`) that audits all Claude skills and commands using a quality checklist + AI holistic judgment. Supports two modes: Quick Scan for recently changed skills, and Full Stocktake for a complete review.
+Evaluate installed skills **holistically, all in one context**, and assign each a
+verdict: `Keep / Improve / Update / Retire / Merge`. This skill does NOT do the
+improving — once it has a verdict, it **hands off to skill-creator (the improvement
+engine)**. That boundary is the point: stocktake is the quality gate, skill-creator
+is the fixer.
 
-## Scope
+> Design note: the old version shelled out to scan scripts and split evaluation into
+> ~20-skills-per-subagent batches. With a 1M context that is not just unnecessary but
+> harmful — batching blinds each subagent to skills in the other batches, so it misses
+> cross-skill overlap. Now we enumerate with Glob and read every skill into one context.
+> Overlap detection depends on that single-context view.
 
-The command targets the following paths **relative to the directory where it is invoked**:
+## Modes (`$ARGUMENTS`)
 
-| Path | Description |
-|------|-------------|
-| `~/.claude/skills/` | Global skills (all projects) |
-| `{cwd}/.claude/skills/` | Project-level skills (if the directory exists) |
+| Argument | Behavior |
+|----------|----------|
+| none / `full` | Read and evaluate every skill (default) |
+| `changed` | Re-evaluate only skills whose `SKILL.md` mtime is newer than `results.json`'s `evaluated_at`; carry the rest forward from the ledger |
 
-**At the start of Phase 1, the command explicitly lists which paths were found and scanned.**
-
-### Targeting a specific project
-
-To include project-level skills, run from that project's root directory:
-
+`changed` detects changes inline (no script):
 ```bash
-cd ~/path/to/my-project
-/skill-stocktake
+find ~/.claude/skills -name SKILL.md -newermt "$(jq -r .evaluated_at ~/.claude/skills/skill-stocktake/results.json)"
 ```
 
-If the project has no `.claude/skills/` directory, only global skills and commands are evaluated.
+## Phase 1 — Inventory
 
-## Modes
+Enumerate skill definition files with Glob (no script needed):
 
-| Mode | Trigger | Duration |
-|------|---------|---------|
-| Quick Scan | `results.json` exists (default) | 5–10 min |
-| Full Stocktake | `results.json` absent, or `/skill-stocktake full` | 20–30 min |
+- `~/.claude/skills/*/SKILL.md`
+- `~/.claude/skills/learned/*.md`
+- if cwd has `.claude/skills/`, also `{cwd}/.claude/skills/*/SKILL.md` (project skills)
 
-**Results cache:** `~/.claude/skills/skill-stocktake/results.json`
+> Because Glob targets only `SKILL.md` / `learned/*.md`, dependency markdown under
+> `.venv` or `.pytest_cache` is excluded structurally (no pruning required). The
+> noise the old `find -name "*.md"` pulled in cannot occur.
 
-## Quick Scan Flow
+**Usage counts**: read `~/.claude/metrics/skill-usage.jsonl` inline (the PostToolUse
+hook `log-skill-usage.sh` appends to it — an independent measurement layer) and count
+per-skill events over 7 / 30 / 90 days. Each line is JSON `{ts,event,skill,path,project}`;
+count both `invoke` and `read` events. Aggregate with a throwaway `python3`/`jq` one-liner
+rather than hand-counting — the log grows over time and hand-counting wastes a tool turn
+per invocation.
 
-Re-evaluate only skills that have changed since the last run (5–10 min).
+- If the log is **missing or its first event is younger than 90 days**, render usage as
+  `—` (unmeasured). **Never render it as 0** — unmeasured and unused are different facts.
 
-1. Read `~/.claude/skills/skill-stocktake/results.json`
-2. Run: `bash ~/.claude/skills/skill-stocktake/scripts/quick-diff.sh \
-         ~/.claude/skills/skill-stocktake/results.json`
-   (Project dir is auto-detected from `$PWD/.claude/skills`; pass it explicitly only if needed)
-3. If output is `[]`: report "No changes since last run." and stop
-4. Re-evaluate only those changed files using the same Phase 2 criteria
-5. Carry forward unchanged skills from previous results
-6. Output only the diff
-7. Run: `bash ~/.claude/skills/skill-stocktake/scripts/save-results.sh \
-         ~/.claude/skills/skill-stocktake/results.json <<< "$EVAL_RESULTS"`
+State the scan result up front: which paths were scanned, how many skills found, and
+whether usage is measurable.
 
-## Full Stocktake Flow
+## Phase 2 — Evaluation (fully inline, holistic)
 
-### Phase 1 — Inventory
+Read the body of **every** target skill and evaluate them one by one while seeing the
+whole set. Checklist:
 
-Run: `bash ~/.claude/skills/skill-stocktake/scripts/scan.sh`
+- [ ] Content overlap with other skills (**a documented orchestrator/sub-skill split is NOT overlap** — e.g. paper-ecosystem → its reviewers, citation-sync → release-doi/wikidata. Distinguish intentional layering from genuine duplication)
+- [ ] Overlap with MEMORY.md / CLAUDE.md / rules
+- [ ] Freshness of technical references (if CLI flags / APIs / tool names look stale, confirm with WebSearch)
+- [ ] Usage frequency (ignore it as a signal when unmeasured)
 
-The script enumerates skill files, extracts frontmatter, and collects UTC mtimes.
-Project dir is auto-detected from `$PWD/.claude/skills`; pass it explicitly only if needed.
-Present the scan summary and inventory table from the script output:
-
-```
-Scanning:
-  ✓ ~/.claude/skills/         (17 files)
-  ✗ {cwd}/.claude/skills/    (not found — global skills only)
-```
-
-| Skill | 7d use | 30d use | Description |
-|-------|--------|---------|-------------|
-
-### Phase 2 — Quality Evaluation
-
-Launch an Agent tool subagent (**general-purpose agent**) with the full inventory and checklist.
-The subagent reads each skill, applies the checklist, and returns per-skill JSON:
-
-`{ "verdict": "Keep"|"Improve"|"Update"|"Retire"|"Merge into [X]", "reason": "..." }`
-
-**Chunk guidance:** Process ~20 skills per subagent invocation to keep context manageable. Save intermediate results to `results.json` (`status: "in_progress"`) after each chunk.
-
-After all skills are evaluated: set `status: "completed"`, proceed to Phase 3.
-
-**Resume detection:** If `status: "in_progress"` is found on startup, resume from the first unevaluated skill.
-
-Each skill is evaluated against this checklist:
-
-```
-- [ ] Content overlap with other skills checked
-- [ ] Overlap with MEMORY.md / CLAUDE.md checked
-- [ ] Freshness of technical references verified (use WebSearch if tool names / CLI flags / APIs are present)
-- [ ] Usage frequency considered
-```
-
-Verdict criteria:
+Evaluation is **holistic judgment, not a numeric rubric**. Guiding dimensions:
+Actionability (concrete examples/steps you can act on), Scope fit (name, trigger, and
+body aligned — not too broad or narrow), Uniqueness (not replaceable by MEMORY / another
+skill), Currency (references work in the current environment).
 
 | Verdict | Meaning |
 |---------|---------|
-| Keep | Useful and current |
+| Keep | Useful, current, unique value |
 | Improve | Worth keeping, but specific improvements needed |
 | Update | Referenced technology is outdated (verify with WebSearch) |
 | Retire | Low quality, stale, or cost-asymmetric |
-| Merge into [X] | Substantial overlap with another skill; name the merge target |
+| Merge into [X] | Substantial overlap with another skill; name the target |
 
-Evaluation is **holistic AI judgment** — not a numeric rubric. Guiding dimensions:
-- **Actionability**: code examples, commands, or steps that let you act immediately
-- **Scope fit**: name, trigger, and content are aligned; not too broad or narrow
-- **Uniqueness**: value not replaceable by MEMORY.md / CLAUDE.md / another skill
-- **Currency**: technical references work in the current environment
+**Zero-usage rule**: when the usage log's first event is **at least 90 days old** AND a
+skill has `use_90d == 0`, it MUST be surfaced as a Retire candidate (the final call is
+the user's). While the log is younger than 90 days this rule does not fire, and verdicts
+fall back to holistic judgment alone.
 
-**Reason quality requirements** — the `reason` field must be self-contained and decision-enabling:
-- Do NOT write "unchanged" alone — always restate the core evidence
-- For **Retire**: state (1) what specific defect was found, (2) what covers the same need instead
-  - Bad: `"Superseded"`
-  - Good: `"disable-model-invocation: true already set; superseded by continuous-learning-v2 which covers all the same patterns plus confidence scoring. No unique content remains."`
-- For **Merge**: name the target and describe what content to integrate
-  - Bad: `"Overlaps with X"`
-  - Good: `"42-line thin content; Step 4 of chatlog-to-article already covers the same workflow. Integrate the 'article angle' tip as a note in that skill."`
-- For **Improve**: describe the specific change needed (what section, what action, target size if relevant)
-  - Bad: `"Too long"`
-  - Good: `"276 lines; Section 'Framework Comparison' (L80–140) duplicates ai-era-architecture-principles; delete it to reach ~150 lines."`
-- For **Keep** (mtime-only change in Quick Scan): restate the original verdict rationale, do not write "unchanged"
-  - Bad: `"Unchanged"`
-  - Good: `"mtime updated but content unchanged. Unique Python reference explicitly imported by rules/python/; no overlap found."`
+Evaluation is **origin-blind**: do not branch on ECC / self-authored / auto-extracted.
+The same checklist applies to every skill.
 
-### Phase 3 — Summary Table
+## Phase 3 — Summary
 
-| Skill | 7d use | Verdict | Reason |
-|-------|--------|---------|--------|
+Render a table: `Skill | 7d | 90d | Verdict | Reason`.
 
-### Phase 4 — Consolidation
+## Phase 4 — Consolidation
 
-1. **Retire / Merge**: present detailed justification per file before confirming with user:
-   - What specific problem was found (overlap, staleness, broken references, etc.)
-   - What alternative covers the same functionality (for Retire: which existing skill/rule; for Merge: the target file and what content to integrate)
-   - Impact of removal (any dependent skills, MEMORY.md references, or workflows affected)
-2. **Improve**: present specific improvement suggestions with rationale:
-   - What to change and why (e.g., "trim 430→200 lines because sections X/Y duplicate python-patterns")
-   - User decides whether to act
-3. **Update**: present updated content with sources checked
-4. Check MEMORY.md line count; propose compression if >100 lines
+- **Retire / Merge**: per file, present (1) the specific defect found, (2) what covers the
+  same need instead (Retire: which existing skill/rule; Merge: the target and what content
+  to integrate), (3) the impact of removal (dependent skills, MEMORY references). **Act only
+  after the user confirms.**
+- **Improve / Update**: **offer** to hand off — "Hand `<skill>` to skill-creator to improve?"
+  — and on approval invoke `skill-creator` with the target skill. Stocktake never does the
+  improvement work itself.
+- **Update the ledger**: Read `results.json` → merge this run's verdicts → Write it back
+  (`evaluated_at` = real UTC from `date -u +%Y-%m-%dT%H:%M:%SZ`). In `changed` mode, preserve
+  the prior verdicts of skills you did not re-evaluate.
+- If MEMORY.md exceeds 100 lines, propose compression.
 
-## Results File Schema
+## Reason quality (required)
 
-`~/.claude/skills/skill-stocktake/results.json`:
+Every `reason` must be **self-contained** — decision-enabling on its own. "unchanged" alone
+is banned; always restate the evidence.
 
-**`evaluated_at`**: Must be set to the actual UTC time of evaluation completion.
-Obtain via Bash: `date -u +%Y-%m-%dT%H:%M:%SZ`. Never use a date-only approximation like `T00:00:00Z`.
+- **Retire**: state the defect + the replacement. Bad: `"Superseded"` / Good: `"disable-model-invocation: true already set; continuous-learning-v2 covers the same patterns plus confidence scoring. No unique content remains."`
+- **Merge**: name the target + what to integrate. Bad: `"Overlaps with X"` / Good: `"42-line thin content; Step 4 of chatlog-to-article already covers this workflow. Integrate the 'article angle' tip there as a note."`
+- **Improve**: which section, what change (target size if relevant). Bad: `"Too long"` / Good: `"276 lines; 'Framework Comparison' (L80–140) duplicates ai-era-architecture-principles. Delete it to reach ~150 lines."`
+- **Keep** (mtime-only change in `changed` mode): restate the original rationale. Bad: `"Unchanged"` / Good: `"Content unchanged. Unique Python reference explicitly imported by rules/python/; no overlap."`
+
+## results.json (lean ledger)
 
 ```json
 {
-  "evaluated_at": "2026-02-21T10:00:00Z",
-  "mode": "full",
-  "batch_progress": {
-    "total": 80,
-    "evaluated": 80,
-    "status": "completed"
-  },
+  "evaluated_at": "2026-06-24T11:09:00Z",
   "skills": {
-    "skill-name": {
-      "path": "~/.claude/skills/skill-name/SKILL.md",
+    "<skill-name>": {
+      "path": "~/.claude/skills/<name>/SKILL.md",
       "verdict": "Keep",
-      "reason": "Concrete, actionable, unique value for X workflow",
+      "reason": "...",
       "mtime": "2026-01-15T08:30:00Z"
     }
   }
 }
 ```
 
-## Notes
+A ledger for verdict history and the last-audit timestamp only. Update it inline with
+Read/Write, not a script. Global skills only (project skills are read fresh from cwd, not
+cached here).
 
-- Evaluation is blind: the same checklist applies to all skills regardless of origin (ECC, self-authored, auto-extracted)
-- Archive / delete operations always require explicit user confirmation
-- No verdict branching by skill origin
+## Related
+
+- `skill-creator` — the improvement engine; hand off Improve/Update work to it.
+- `config-gc` — GC over skill *existence* and the whole of ~/.claude (hooks/permissions/MCP/cache); stocktake judges skill *quality*.
+- `harness-sync` — use it to sync this skill to its public repo.
+- Usage measurement: `~/.claude/hooks/log-skill-usage.sh` → `~/.claude/metrics/skill-usage.jsonl` (a measurement layer independent of stocktake).

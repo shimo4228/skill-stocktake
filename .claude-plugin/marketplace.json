@@ -1,7 +1,7 @@
 {
   "name": "skill-stocktake",
-  "version": "1.0.0",
-  "description": "Audit Claude skills and commands for quality with Quick Scan and Full Stocktake modes.",
+  "version": "2.0.0",
+  "description": "Audit installed Claude skills for quality (Keep/Improve/Update/Retire/Merge) — inline Glob inventory + holistic single-context evaluation, no scan scripts.",
   "author": "shimo4228",
   "license": "MIT",
   "skills": [

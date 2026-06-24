@@ -2,14 +2,14 @@ Language: English | [日本語](README.ja.md)
 
 # skill-stocktake
 
-An [Agent Skill](https://agentskills.io/specification) that audits all your Claude skills and commands for quality. Uses a checklist + AI holistic judgment to produce Keep / Improve / Update / Retire / Merge verdicts.
+An [Agent Skill](https://agentskills.io/specification) that audits all your Claude skills for quality. It reads every installed skill in one context and applies AI holistic judgment to produce Keep / Improve / Update / Retire / Merge verdicts.
 
 ## Install
 
 ### Claude Code
 
 ```bash
-# Copy skill + scripts into your global skills directory
+# Copy the skill into your global skills directory
 cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 ```
 
@@ -21,22 +21,19 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 
 ## Modes
 
-| Mode | Trigger | Duration |
-|------|---------|----------|
-| **Quick Scan** | `results.json` exists (default) | 5-10 min |
-| **Full Stocktake** | `results.json` absent, or `/skill-stocktake full` | 20-30 min |
+| Mode | Trigger | What it does |
+|------|---------|--------------|
+| **full** | default, or `/skill-stocktake full` | Read and evaluate every skill |
+| **changed** | `/skill-stocktake changed` | Re-evaluate only skills whose `SKILL.md` changed since the last run; carry the rest forward from the ledger |
 
 ## How It Works
 
-### Quick Scan
-Re-evaluates only skills that changed since the last run. Uses `scripts/quick-diff.sh` to detect mtime changes, then carries forward unchanged results.
+No scan scripts and no subagent batching — with a large context window the skill enumerates skills with Glob and reads them all into one context. That single-context view is what makes cross-skill overlap detection accurate.
 
-### Full Stocktake
-
-1. **Phase 1 — Inventory**: `scripts/scan.sh` enumerates all skill files, extracts frontmatter, and collects usage stats
-2. **Phase 2 — Quality Evaluation**: AI subagent reads each skill and applies the checklist (overlap, freshness, usage frequency)
-3. **Phase 3 — Summary Table**: Verdicts with actionable reasons
-4. **Phase 4 — Consolidation**: Retire/Merge/Improve actions with user confirmation
+1. **Phase 1 — Inventory**: Glob `~/.claude/skills/*/SKILL.md` + `learned/*.md` (and project skills under `$PWD/.claude/skills/` if present). Because Glob targets only skill definition files, dependency markdown under `.venv` / `.pytest_cache` is excluded structurally — no pruning needed. Usage counts are read inline from `~/.claude/metrics/skill-usage.jsonl` if a usage hook is installed.
+2. **Phase 2 — Evaluation**: read every skill body and apply the checklist holistically — content overlap (a documented orchestrator/sub-skill split is *not* overlap), MEMORY/CLAUDE.md/rules overlap, reference freshness, usage frequency.
+3. **Phase 3 — Summary**: a per-skill verdict table with self-contained reasons.
+4. **Phase 4 — Consolidation**: Retire/Merge act only after you confirm; Improve/Update are offered as a hand-off to [skill-creator](https://github.com/shimo4228/skill-creator), the improvement engine. The verdict ledger (`results.json`) is updated inline.
 
 ## Verdict Criteria
 
@@ -48,19 +45,10 @@ Re-evaluates only skills that changed since the last run. Uses `scripts/quick-di
 | **Retire** | Low quality, stale, or cost-asymmetric |
 | **Merge into [X]** | Substantial overlap with another skill |
 
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/scan.sh` | Enumerate skill files with frontmatter and mtime |
-| `scripts/quick-diff.sh` | Detect changed/new skills since last evaluation |
-| `scripts/save-results.sh` | Merge evaluation results into `results.json` |
-
 ## Requirements
 
-- `jq` (JSON processing)
-- `bash` 4+
-- Claude Code with Agent tool support (for AI evaluation)
+- Claude Code with the **Glob**, **Read**, and **Bash** tools (the audit runs in one main context — no subagents required).
+- Optional: `jq` and `python3` for the small inline one-liners (changed-mode timestamp check, usage aggregation). The skill degrades gracefully without them.
 
 ## About this skill
 

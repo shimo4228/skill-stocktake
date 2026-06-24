@@ -2,14 +2,14 @@ Language: [English](README.md) | 日本語
 
 # skill-stocktake
 
-Claude のスキルとコマンドの品質を監査する [Agent Skill](https://agentskills.io/specification) です。チェックリスト + AI の総合判断により、Keep / Improve / Update / Retire / Merge の判定を出します。
+Claude のスキルの品質を監査する [Agent Skill](https://agentskills.io/specification) です。インストール済みの全スキルを 1 つのコンテキストで読み込み、AI の総合判断により Keep / Improve / Update / Retire / Merge の判定を出します。
 
 ## インストール
 
 ### Claude Code
 
 ```bash
-# スキルとスクリプトをグローバルスキルディレクトリにコピー
+# スキルをグローバルスキルディレクトリにコピー
 cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 ```
 
@@ -21,22 +21,19 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 
 ## モード
 
-| モード | トリガー | 所要時間 |
-|--------|----------|----------|
-| **Quick Scan** | `results.json` が存在する場合（デフォルト） | 5〜10 分 |
-| **Full Stocktake** | `results.json` が存在しない場合、または `/skill-stocktake full` | 20〜30 分 |
+| モード | トリガー | 動作 |
+|--------|----------|------|
+| **full** | デフォルト、または `/skill-stocktake full` | 全スキルを読み込んで評価 |
+| **changed** | `/skill-stocktake changed` | 前回以降に `SKILL.md` が変更されたスキルのみ再評価。残りは台帳から引き継ぐ |
 
 ## 仕組み
 
-### Quick Scan
-前回の実行以降に変更されたスキルのみを再評価します。`scripts/quick-diff.sh` で mtime の変化を検出し、変更のなかったスキルの結果はそのまま引き継ぎます。
+スキャンスクリプトもサブエージェントのバッチ分割もありません。大きなコンテキストウィンドウを前提に、Glob でスキルを列挙し、全スキルを 1 つのコンテキストに読み込みます。この「一括して見る」視点こそが、スキル間の重複検出を正確にします。
 
-### Full Stocktake
-
-1. **Phase 1 — インベントリ**: `scripts/scan.sh` が全スキルファイルを列挙し、フロントマターの抽出と使用統計の収集を行います
-2. **Phase 2 — 品質評価**: AI サブエージェントが各スキルを読み込み、チェックリスト（重複・鮮度・使用頻度）を適用します
-3. **Phase 3 — サマリーテーブル**: アクション理由付きの判定結果を出力します
-4. **Phase 4 — 統合**: Retire / Merge / Improve のアクションをユーザー確認のうえ実行します
+1. **Phase 1 — インベントリ**: `~/.claude/skills/*/SKILL.md` + `learned/*.md`（および `$PWD/.claude/skills/` があればプロジェクトスキル）を Glob で列挙。Glob はスキル定義ファイルのみを対象とするため、`.venv` / `.pytest_cache` 配下の依存 markdown は構造的に除外され、prune は不要です。使用回数は、使用ログ hook が導入されていれば `~/.claude/metrics/skill-usage.jsonl` をインラインで読み取ります。
+2. **Phase 2 — 評価**: 全スキル本文を読み、チェックリストを一括適用します — 内容重複（ドキュメント化された orchestrator/sub-skill の層分けは重複ではない）、MEMORY/CLAUDE.md/rules との重複、参照の鮮度、使用頻度。
+3. **Phase 3 — サマリー**: 自己完結した理由付きの判定テーブル。
+4. **Phase 4 — 統合**: Retire/Merge はユーザー確認後にのみ実行。Improve/Update は改善エンジン [skill-creator](https://github.com/shimo4228/skill-creator) へのハンドオフとして提示します。判定台帳（`results.json`）はインラインで更新します。
 
 ## 判定基準
 
@@ -48,19 +45,10 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 | **Retire** | 品質が低い、陳腐化している、またはコスト対効果が悪い |
 | **Merge into [X]** | 他のスキルと大幅に重複している |
 
-## スクリプト
-
-| スクリプト | 用途 |
-|------------|------|
-| `scripts/scan.sh` | フロントマターと mtime を含むスキルファイルの列挙 |
-| `scripts/quick-diff.sh` | 前回の評価以降に変更・追加されたスキルの検出 |
-| `scripts/save-results.sh` | 評価結果を `results.json` にマージ |
-
 ## 要件
 
-- `jq`（JSON 処理）
-- `bash` 4 以上
-- Agent ツールをサポートする Claude Code（AI 評価に使用）
+- **Glob**・**Read**・**Bash** ツールをサポートする Claude Code（監査は 1 つのメインコンテキストで実行 — サブエージェント不要）。
+- 任意: 小さなインラインワンライナー（changed モードのタイムスタンプ確認、使用回数集計）用に `jq` と `python3`。無くても機能は劣化せず動作します。
 
 ## このスキルについて
 

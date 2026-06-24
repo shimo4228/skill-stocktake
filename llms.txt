@@ -1,19 +1,20 @@
 # skill-stocktake
 
-> A Claude Code skill (MIT) that audits all Claude skills and commands for quality. Uses a checklist plus AI holistic judgment to produce Keep / Improve / Update / Retire / Merge verdicts. Supports Quick Scan (changed-only, 5–10 min) and Full Stocktake (complete review, 20–30 min) modes.
+> A Claude Code skill (MIT) that audits all installed Claude skills for quality. It reads every skill in one context and applies AI holistic judgment to produce Keep / Improve / Update / Retire / Merge verdicts. Two modes: full (evaluate everything) and changed (re-evaluate only changed skills, carry the rest forward). No scan scripts, no subagent batching — it relies on a large context window.
 
 ## Core documentation
 
-- [llms-full.txt](llms-full.txt): self-contained Q&A reference for AI agents (Project Facts, Prior Research, 9 question-form H2 sections)
+- [llms-full.txt](llms-full.txt): self-contained Q&A reference for AI agents (Project Facts, Prior Research, question-form H2 sections)
 - [README.md](README.md): human-facing narrative (install, modes, verdict criteria, requirements)
-- [SKILL.md](skills/skill-stocktake/SKILL.md): full slash-command specification — scope, Quick Scan flow, Full Stocktake flow, evaluation rubric
+- [SKILL.md](skills/skill-stocktake/SKILL.md): full slash-command specification — modes, four-phase flow, evaluation checklist, reason-quality rules
 
 ## Architecture
 
 - 5 verdicts: **Keep** (useful and current), **Improve** (worth keeping, specific fixes), **Update** (outdated tech reference), **Retire** (low quality / stale / cost-asymmetric), **Merge into X** (substantial overlap with another skill)
-- 3 shell scripts: `scripts/scan.sh` (enumerate), `scripts/quick-diff.sh` (detect changes), `scripts/save-results.sh` (cache)
-- Results cache: `~/.claude/skills/skill-stocktake/results.json`
-- 4-phase Full Stocktake: Inventory → Quality Evaluation → Summary Table → Consolidation
+- Inventory via Glob (`~/.claude/skills/*/SKILL.md` + `learned/*.md`); dependency markdown under `.venv` / `.pytest_cache` is excluded structurally because Glob targets only skill definition files
+- Fully inline holistic evaluation — every skill read into one context so cross-skill overlap detection is accurate; no scan scripts and no subagent batching
+- Lean verdict ledger: `~/.claude/skills/skill-stocktake/results.json` (`{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`), updated inline
+- 4 phases: Inventory → Evaluation → Summary → Consolidation; Improve/Update verdicts hand off to skill-creator
 
 ## Standard reference
 
@@ -22,10 +23,10 @@
 
 ## Sibling skills
 
+- [skill-creator](https://github.com/shimo4228/skill-creator): the improvement engine; skill-stocktake hands off Improve/Update verdicts to it
 - [llms-txt-writer](https://github.com/shimo4228/llms-txt-writer): writes AI-facing docs optimized for ChatGPT / Perplexity / Gemini citation
-- [skill-comply](https://github.com/shimo4228/skill-comply): measures whether agents actually follow skill / rule definitions (v0.3.0)
+- [skill-comply](https://github.com/shimo4228/skill-comply): measures whether agents actually follow skill / rule definitions
 - [context-sync](https://github.com/shimo4228/context-sync): audits and fixes project documentation roles
 - [search-first](https://github.com/shimo4228/search-first): research-before-coding workflow
 - [rules-distill](https://github.com/shimo4228/rules-distill): scan installed skills, extract cross-cutting principles, and distill them into rules
 - [learn-eval](https://github.com/shimo4228/learn-eval): extract reusable patterns from sessions, self-evaluate quality, and save to the right location
-- [daily-research](https://github.com/shimo4228/daily-research): cron-driven daily research digest — theme selection, multi-stage web research, LLM-as-Judge evaluation
