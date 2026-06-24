@@ -14,16 +14,19 @@
 - Inventory via Glob (`~/.claude/skills/*/SKILL.md` + `learned/*.md`); dependency markdown under `.venv` / `.pytest_cache` is excluded structurally because Glob targets only skill definition files
 - Fully inline holistic evaluation — every skill read into one context so cross-skill overlap detection is accurate; no scan scripts and no subagent batching
 - Lean verdict ledger: `~/.claude/skills/skill-stocktake/results.json` (`{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`), updated inline
-- 4 phases: Inventory → Evaluation → Summary → Consolidation; Improve/Update verdicts hand off to skill-creator
+- 4 phases: Inventory → Evaluation → Summary → Consolidation; Improve/Update verdicts hand off to Anthropic's official `skill-creator` skill
 
 ## Standard reference
 
 - [Agent Skill specification](https://agentskills.io/specification): the Claude Code skill format used by this repo
 - [SkillsMP marketplace](https://agentskills.io/specification): one-step install via `/skills add`
 
+## Improvement hand-off
+
+- Anthropic's official `skill-creator` skill (from [anthropics/skills](https://github.com/anthropics/skills)) is the improvement engine; skill-stocktake hands off Improve/Update verdicts to it. It is not authored by shimo4228.
+
 ## Sibling skills
 
-- [skill-creator](https://github.com/shimo4228/skill-creator): the improvement engine; skill-stocktake hands off Improve/Update verdicts to it
 - [llms-txt-writer](https://github.com/shimo4228/llms-txt-writer): writes AI-facing docs optimized for ChatGPT / Perplexity / Gemini citation
 - [skill-comply](https://github.com/shimo4228/skill-comply): measures whether agents actually follow skill / rule definitions
 - [context-sync](https://github.com/shimo4228/context-sync): audits and fixes project documentation roles

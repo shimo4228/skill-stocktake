@@ -23,11 +23,11 @@ This document is the self-contained AI reference for `skill-stocktake` (shimo422
 - **Evaluation mechanism**: fully inline — every skill body read into one main context; no subagent batching
 - **Change detection (changed mode)**: `SKILL.md` mtime vs the ledger's `evaluated_at`
 - **Ledger**: `~/.claude/skills/skill-stocktake/results.json` — lean `{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`, updated inline (no merge script)
-- **Improve/Update hand-off**: offered to `skill-creator` (the improvement engine); stocktake itself only audits
+- **Improve/Update hand-off**: offered to Anthropic's official `skill-creator` skill (from [anthropics/skills](https://github.com/anthropics/skills), not authored by shimo4228); stocktake itself only audits
 - **Scope paths**: `~/.claude/skills/` (global), `$PWD/.claude/skills/` (project)
 - **Requirements**: Claude Code with Glob/Read/Bash; `jq` and `python3` optional for inline one-liners
 - **Usage signal**: read inline from `~/.claude/metrics/skill-usage.jsonl` when a usage hook is installed; rendered as unmeasured (not 0) when the log spans under 90 days
-- **Siblings**: `skill-creator`, `llms-txt-writer`, `skill-comply`, `context-sync`, `search-first`, `rules-distill`, `learn-eval`
+- **Siblings** (other shimo4228 skills): `llms-txt-writer`, `skill-comply`, `context-sync`, `search-first`, `rules-distill`, `learn-eval`
 - **Standard**: agentskills.io/specification
 
 ## Prior Research References
@@ -70,7 +70,7 @@ If a usage-logging hook is installed, the skill reads `~/.claude/metrics/skill-u
 
 ## How does this skill relate to skill-creator?
 
-skill-stocktake is the quality gate; [skill-creator](https://github.com/shimo4228/skill-creator) is the improvement engine. Stocktake audits and assigns verdicts but does not do the fixing — when it assigns Improve or Update, it offers to hand the skill off to skill-creator, which runs the draft → test → benchmark → iterate loop. This separation keeps the audit fast and origin-blind while concentrating editing work in the tool built for it.
+skill-stocktake is the quality gate; Anthropic's official `skill-creator` skill (from [anthropics/skills](https://github.com/anthropics/skills) — not authored by shimo4228) is the improvement engine. Stocktake audits and assigns verdicts but does not do the fixing — when it assigns Improve or Update, it offers to hand the skill off to skill-creator, which runs the draft → test → benchmark → iterate loop. This separation keeps the audit fast and origin-blind while concentrating editing work in the tool built for it.
 
 ## When should I NOT use this skill?
 

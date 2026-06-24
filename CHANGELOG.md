@@ -14,7 +14,7 @@ single-context holistic evaluation.
 - **Removed subagent batching.** Every skill is read into one context and evaluated together. Batching blinded each subagent to skills in other batches and missed cross-skill overlap; a single-context view is what makes overlap detection accurate.
 - **Modes renamed**: Quick Scan / Full Stocktake → `full` (default) and `changed`.
 - **`results.json` is now a lean verdict ledger** — `{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`. Dropped `mode` / `batch_progress` / resume state.
-- **Improve/Update verdicts hand off to [`skill-creator`](https://github.com/shimo4228/skill-creator)** (the improvement engine); stocktake itself stays audit-only.
+- **Improve/Update verdicts hand off to Anthropic's official [`skill-creator`](https://github.com/anthropics/skills)** (the improvement engine, not a shimo4228 skill); stocktake itself stays audit-only.
 - **SKILL.md body rewritten in English** for publication.
 
 ### Fixed
@@ -50,6 +50,6 @@ between an AI agent and its operator over time.
 | Skill | Role | When |
 |---|---|---|
 | [`search-first`](https://github.com/shimo4228/search-first) | Research before coding | Earlier phase of the AKC knowledge lifecycle |
-| [`skill-creator`](https://github.com/shimo4228/skill-creator) | Author / improve a single skill | Where stocktake hands off Improve/Update work |
+| [`skill-creator`](https://github.com/anthropics/skills) (Anthropic, not shimo4228) | Author / improve a single skill | Where stocktake hands off Improve/Update work |
 | [`learn-eval`](https://github.com/shimo4228/learn-eval) | Per-session pattern extraction with quality gate | Later phase — feeds new patterns after stocktake clears retired entries |
 | [`rules-distill`](https://github.com/shimo4228/rules-distill) | Promote cross-cutting principles to rules | Final phase of the lifecycle |

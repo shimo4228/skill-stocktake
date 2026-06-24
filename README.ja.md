@@ -33,7 +33,7 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 1. **Phase 1 — インベントリ**: `~/.claude/skills/*/SKILL.md` + `learned/*.md`（および `$PWD/.claude/skills/` があればプロジェクトスキル）を Glob で列挙。Glob はスキル定義ファイルのみを対象とするため、`.venv` / `.pytest_cache` 配下の依存 markdown は構造的に除外され、prune は不要です。使用回数は、使用ログ hook が導入されていれば `~/.claude/metrics/skill-usage.jsonl` をインラインで読み取ります。
 2. **Phase 2 — 評価**: 全スキル本文を読み、チェックリストを一括適用します — 内容重複（ドキュメント化された orchestrator/sub-skill の層分けは重複ではない）、MEMORY/CLAUDE.md/rules との重複、参照の鮮度、使用頻度。
 3. **Phase 3 — サマリー**: 自己完結した理由付きの判定テーブル。
-4. **Phase 4 — 統合**: Retire/Merge はユーザー確認後にのみ実行。Improve/Update は改善エンジン [skill-creator](https://github.com/shimo4228/skill-creator) へのハンドオフとして提示します。判定台帳（`results.json`）はインラインで更新します。
+4. **Phase 4 — 統合**: Retire/Merge はユーザー確認後にのみ実行。Improve/Update は改善エンジンである Anthropic 純正の [`skill-creator`](https://github.com/anthropics/skills) へのハンドオフとして提示します。判定台帳（`results.json`）はインラインで更新します。
 
 ## 判定基準
 

@@ -33,7 +33,7 @@ No scan scripts and no subagent batching — with a large context window the ski
 1. **Phase 1 — Inventory**: Glob `~/.claude/skills/*/SKILL.md` + `learned/*.md` (and project skills under `$PWD/.claude/skills/` if present). Because Glob targets only skill definition files, dependency markdown under `.venv` / `.pytest_cache` is excluded structurally — no pruning needed. Usage counts are read inline from `~/.claude/metrics/skill-usage.jsonl` if a usage hook is installed.
 2. **Phase 2 — Evaluation**: read every skill body and apply the checklist holistically — content overlap (a documented orchestrator/sub-skill split is *not* overlap), MEMORY/CLAUDE.md/rules overlap, reference freshness, usage frequency.
 3. **Phase 3 — Summary**: a per-skill verdict table with self-contained reasons.
-4. **Phase 4 — Consolidation**: Retire/Merge act only after you confirm; Improve/Update are offered as a hand-off to [skill-creator](https://github.com/shimo4228/skill-creator), the improvement engine. The verdict ledger (`results.json`) is updated inline.
+4. **Phase 4 — Consolidation**: Retire/Merge act only after you confirm; Improve/Update are offered as a hand-off to Anthropic's official [`skill-creator`](https://github.com/anthropics/skills) skill, the improvement engine. The verdict ledger (`results.json`) is updated inline.
 
 ## Verdict Criteria
 
