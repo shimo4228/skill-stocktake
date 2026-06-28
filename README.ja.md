@@ -2,6 +2,8 @@ Language: [English](README.md) | 日本語
 
 # skill-stocktake
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shimo4228/skill-stocktake)
+
 Claude のスキルの品質を監査する [Agent Skill](https://agentskills.io/specification) です。インストール済みの全スキルを 1 つのコンテキストで読み込み、AI の総合判断により Keep / Improve / Update / Retire / Merge の判定を出します。
 
 ## インストール
