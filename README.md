@@ -2,7 +2,7 @@ Language: English | [日本語](README.ja.md)
 
 # skill-stocktake
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shimo4228/skill-stocktake)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shimo4228/skill-stocktake) [![GitMCP](https://img.shields.io/endpoint?url=https://gitmcp.io/badge/shimo4228/skill-stocktake)](https://gitmcp.io/shimo4228/skill-stocktake)
 
 An [Agent Skill](https://agentskills.io/specification) that audits all your Claude skills for quality. It reads every installed skill in one context and applies AI holistic judgment to produce Keep / Improve / Update / Retire / Merge verdicts.
 
