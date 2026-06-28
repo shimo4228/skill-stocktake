@@ -2,7 +2,7 @@ Language: [English](README.md) | 日本語
 
 # skill-stocktake
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shimo4228/skill-stocktake) [![GitMCP](https://img.shields.io/endpoint?url=https://gitmcp.io/badge/shimo4228/skill-stocktake)](https://gitmcp.io/shimo4228/skill-stocktake) [![View Code Wiki](https://assets.codewiki.google/readme-badge/static.svg)](https://codewiki.google/github.com/shimo4228/skill-stocktake)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shimo4228/skill-stocktake) [![GitMCP](https://img.shields.io/endpoint?url=https://gitmcp.io/badge/shimo4228/skill-stocktake)](https://gitmcp.io/shimo4228/skill-stocktake)
 
 Claude のスキルの品質を監査する [Agent Skill](https://agentskills.io/specification) です。インストール済みの全スキルを 1 つのコンテキストで読み込み、AI の総合判断により Keep / Improve / Update / Retire / Merge の判定を出します。
 
