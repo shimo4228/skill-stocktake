@@ -52,6 +52,16 @@ No scan scripts and no subagent batching — with a large context window the ski
 - Claude Code with the **Glob**, **Read**, and **Bash** tools (the audit runs in one main context — no subagents required).
 - Optional: `jq` and `python3` for the small inline one-liners (changed-mode timestamp check, usage aggregation). The skill degrades gracefully without them.
 
+## References
+
+The **aggregate-cost** dimension of the audit — a large, uncurated skill library degrades the agent's ability to select the right skill and pulls behaviour back toward the no-skill baseline, so the Keep bar rises with library size — is grounded in 2026 empirical work on agent skill libraries:
+
+- [How Well Do Agentic Skills Work in the Wild](https://arxiv.org/abs/2604.04323) (Liu et al., 2026) — skill benefits weaken in realistic settings as the agent must retrieve from a large, uncurated library.
+- [SkillsBench: Benchmarking How Well Agent Skills Work Across Diverse Tasks](https://arxiv.org/abs/2602.12670) (Li et al., 2026) — curation produces large, uneven gains across domains; skill quality has a non-linear effect on outcome.
+- [SkillOps: Managing LLM Agent Skill Libraries as Self-Maintaining Software Ecosystems](https://arxiv.org/abs/2605.13716) (Pu, Song & Zhao, 2026) — frames "skill technical debt" and library-health maintenance as a first-class discipline.
+
+skill-stocktake keeps the *judgment of what stays* with the human — the audit proposes verdicts and you confirm them — which is its delta from the self-maintaining systems above.
+
 ## About this skill
 
 This skill implements the **Curate** phase of the [Agent Knowledge Cycle (AKC)](https://github.com/shimo4228/agent-knowledge-cycle) — a Zenodo-citable six-phase bidirectional growth loop ([DOI 10.5281/zenodo.19200726](https://doi.org/10.5281/zenodo.19200726)) for sustaining intent alignment between an AI agent and its operator over time. AKC is one of three research lines by [@shimo4228](https://github.com/shimo4228), alongside [Contemplative Agent](https://github.com/shimo4228/contemplative-agent) ([DOI 10.5281/zenodo.19212118](https://doi.org/10.5281/zenodo.19212118)) — autonomous agents grounded in four contemplative axioms — and [Agent Attribution Practice (AAP)](https://github.com/shimo4228/agent-attribution-practice) ([DOI 10.5281/zenodo.19652013](https://doi.org/10.5281/zenodo.19652013)) — harness-neutral ADRs on accountability distribution.

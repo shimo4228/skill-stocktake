@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Aggregate-cost evaluation dimension.** The audit now weighs set-level library cost, not only per-skill quality: a large, uncurated library degrades skill selection and pulls behaviour toward the no-skill baseline, so the Keep bar rises with library size and a merely-adequate skill becomes a Retire/Merge candidate on aggregate-dilution grounds alone. A judgment input, never a quota. Grounded in 2026 skill-library benchmarks (Liu et al. arXiv:2604.04323; Li et al. arXiv:2602.12670; SkillOps arXiv:2605.13716) — see README "References".
+
 ## [2.0.0] - 2026-06-24
 
 Major redesign for the large-context era. The skill dropped its shell-script

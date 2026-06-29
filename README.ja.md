@@ -52,6 +52,16 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 - **Glob**・**Read**・**Bash** ツールをサポートする Claude Code（監査は 1 つのメインコンテキストで実行 — サブエージェント不要）。
 - 任意: 小さなインラインワンライナー（changed モードのタイムスタンプ確認、使用回数集計）用に `jq` と `python3`。無くても機能は劣化せず動作します。
 
+## 参考研究
+
+監査の **集合コスト (aggregate cost)** 次元 — 大きく未整理なスキルライブラリはエージェントのスキル選択を劣化させ、挙動を no-skill ベースラインへ引き戻すため、ライブラリが大きいほど Keep のバーが上がる — は、2026 年のエージェントスキルライブラリに関する経験的研究に基づく:
+
+- [How Well Do Agentic Skills Work in the Wild](https://arxiv.org/abs/2604.04323) (Liu et al., 2026) — 現実的な設定では、大きく未整理なライブラリから検索するほどスキルの利得が弱まる。
+- [SkillsBench: Benchmarking How Well Agent Skills Work Across Diverse Tasks](https://arxiv.org/abs/2602.12670) (Li et al., 2026) — キュレーションはドメイン横断で大きく不均一な利得を生む。スキルの品質は結果に非線形に効く。
+- [SkillOps: Managing LLM Agent Skill Libraries as Self-Maintaining Software Ecosystems](https://arxiv.org/abs/2605.13716) (Pu, Song & Zhao, 2026) — 「スキル技術的負債」とライブラリ健全性の維持を第一級の規律として定式化。
+
+skill-stocktake は **何を残すかの判断** を人間に保持する（監査は判定を提案し、確定はユーザーが行う）— 上記の自己維持システムとの差分はここにある。
+
 ## このスキルについて
 
 このスキルは [Agent Knowledge Cycle (AKC)](https://github.com/shimo4228/agent-knowledge-cycle) の **Curate** フェーズを実装する — エージェント行動とオペレーターの判断が共発展する 6 フェーズ双方向成長ループ ([DOI 10.5281/zenodo.19200726](https://doi.org/10.5281/zenodo.19200726))。AKC は [@shimo4228](https://github.com/shimo4228) の 3 つの研究ラインの 1 つで、他に [Contemplative Agent](https://github.com/shimo4228/contemplative-agent) ([DOI 10.5281/zenodo.19212118](https://doi.org/10.5281/zenodo.19212118)) — 4 つの contemplative 公理に基づく自律エージェント — と [Agent Attribution Practice (AAP)](https://github.com/shimo4228/agent-attribution-practice) ([DOI 10.5281/zenodo.19652013](https://doi.org/10.5281/zenodo.19652013)) — 自律 AI エージェントの責任分配に関するハーネス中立 ADR — がある。

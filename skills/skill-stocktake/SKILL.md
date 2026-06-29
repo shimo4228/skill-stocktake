@@ -75,6 +75,14 @@ Actionability (concrete examples/steps you can act on), Scope fit (name, trigger
 body aligned — not too broad or narrow), Uniqueness (not replaceable by MEMORY / another
 skill), Currency (references work in the current environment).
 
+**Aggregate cost (set-level, not per-skill):** holding a skill is not free even when the
+skill is individually fine. Skill benefits are fragile — a large, uncurated library
+degrades the agent's ability to select the right skill and pulls behaviour back toward the
+no-skill baseline. So the Keep bar **rises with library size**: when the set is large, a
+merely-adequate skill (rare use, low uniqueness, heavy adjacency to others) is a
+Retire/Merge candidate on aggregate-dilution grounds alone — independent of any defect in
+the skill itself. This is a judgment input, never a quota; do not retire to hit a number.
+
 | Verdict | Meaning |
 |---------|---------|
 | Keep | Useful, current, unique value |
