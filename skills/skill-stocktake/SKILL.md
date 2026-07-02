@@ -47,15 +47,21 @@ Enumerate skill definition files with Glob (no script needed):
 > `.venv` or `.pytest_cache` is excluded structurally (no pruning required). The
 > noise the old `find -name "*.md"` pulled in cannot occur.
 
-**Usage counts**: read `~/.claude/metrics/skill-usage.jsonl` inline (the PostToolUse
-hook `log-skill-usage.sh` appends to it — an independent measurement layer) and count
-per-skill events over 7 / 30 / 90 days. Each line is JSON `{ts,event,skill,path,project}`;
-count both `invoke` and `read` events. Aggregate with a throwaway `python3`/`jq` one-liner
+**Usage counts**: read `~/.claude/metrics/skill-usage.jsonl` inline (the hook
+`log-skill-usage.sh` appends to it — an independent measurement layer, wired as
+PostToolUse `Read|Skill` + UserPromptSubmit) and count per-skill events over
+7 / 30 / 90 days. Each line is JSON `{ts,event,skill,path,project}`; count `invoke`,
+`read`, and `slash` events. Aggregate with a throwaway `python3`/`jq` one-liner
 rather than hand-counting — the log grows over time and hand-counting wastes a tool turn
 per invocation.
 
 - If the log is **missing or its first event is younger than 90 days**, render usage as
   `—` (unmeasured). **Never render it as 0** — unmeasured and unused are different facts.
+- `slash` events exist only from **2026-07-03** (before that, user-typed `/skill`
+  invocations were injected as command-messages and fired neither the Skill tool nor a
+  Read — invisible to the hook). For windows straddling that date, treat counts for
+  **user-invocable** skills as **lower bounds**, and never Retire on low usage alone
+  when the skill's primary mode is user-typed slash invocation.
 
 State the scan result up front: which paths were scanned, how many skills found, and
 whether usage is measurable.
@@ -63,14 +69,35 @@ whether usage is measurable.
 ## Phase 2 — Evaluation (fully inline, holistic)
 
 Read the body of **every** target skill and evaluate them one by one while seeing the
-whole set. Checklist:
+whole set.
 
-- [ ] Content overlap with other skills (**a documented orchestrator/sub-skill split is NOT overlap** — e.g. paper-ecosystem → its reviewers, citation-sync → release-doi/wikidata. Distinguish intentional layering from genuine duplication)
-- [ ] Overlap with MEMORY.md / CLAUDE.md / rules
-- [ ] Freshness of technical references (if CLI flags / APIs / tool names look stale, confirm with WebSearch)
-- [ ] Usage frequency (ignore it as a signal when unmeasured)
+**Stage 1 — binary screen (every skill).** Answer each item as an explicit Yes/No per
+skill. Record answers internally; **surface only the No answers** in the report — a
+wall of Yes rows changes no decision and buries the defects:
 
-Evaluation is **holistic judgment, not a numeric rubric**. Guiding dimensions:
+- [ ] No content overlap with other skills? (**a documented orchestrator/sub-skill split is NOT overlap** — e.g. paper-ecosystem → its reviewers, citation-sync → release-doi/wikidata. Distinguish intentional layering from genuine duplication)
+- [ ] No overlap with MEMORY.md / CLAUDE.md / rules?
+- [ ] Technical references current? (if CLI flags / APIs / tool names look stale, confirm with WebSearch)
+- [ ] Used within 90d? (skip this question entirely when usage is unmeasured — an unmeasured skill gets no usage answer, not a No)
+
+**Stage 2 — verdict pressure-test (non-Keep candidates only).** When Stage 1 plus the
+holistic read points to Improve / Update / Retire / Merge, generate **1–3 skill-specific
+atomic yes/no questions** that try to **refute the draft verdict** before finalizing it
+(e.g. "the script path referenced at L40 resolves on disk — Yes/No", "the overlap with
+X survives reading both bodies side by side, not just the descriptions — Yes/No", "the
+'stale' CLI flag is actually removed in the current tool version — Yes/No"). Answer each
+with one line of evidence (file read, path check, WebSearch).
+
+- A refuted defect → the verdict falls back toward Keep. An confirmed defect → the No
+  answers become the **concrete improvement list handed to skill-creator** (Improve/Update)
+  or the removal rationale (Retire/Merge).
+- Keep-bound skills get **no** dynamic questions — at library scale, generating questions
+  for every skill bloats output without changing any verdict (the asymmetry with
+  learn-eval, which probes its single draft unconditionally, is deliberate).
+
+Evaluation is **holistic judgment, not a numeric rubric** — binary answers are evidence
+feeding the verdict, never aggregated into a score (a satisfaction ratio changes no
+decision here and dilutes a single dominant No). Guiding dimensions:
 Actionability (concrete examples/steps you can act on), Scope fit (name, trigger, and
 body aligned — not too broad or narrow), Uniqueness (not replaceable by MEMORY / another
 skill), Currency (references work in the current environment).
@@ -120,7 +147,9 @@ Render a table: `Skill | 7d | 90d | Verdict | Reason`.
 ## Reason quality (required)
 
 Every `reason` must be **self-contained** — decision-enabling on its own. "unchanged" alone
-is banned; always restate the evidence.
+is banned; always restate the evidence. For non-Keep verdicts, the reason cites the
+**No answers from the binary screen / pressure-test** (question + one-line evidence) —
+that is what makes it decision-enabling without re-reading the skill.
 
 - **Retire**: state the defect + the replacement. Bad: `"Superseded"` / Good: `"disable-model-invocation: true already set; continuous-learning-v2 covers the same patterns plus confidence scoring. No unique content remains."`
 - **Merge**: name the target + what to integrate. Bad: `"Overlaps with X"` / Good: `"42-line thin content; Step 4 of chatlog-to-article already covers this workflow. Integrate the 'article angle' tip there as a note."`
@@ -153,3 +182,12 @@ cached here).
 - `config-gc` — GC over skill *existence* and the whole of ~/.claude (hooks/permissions/MCP/cache); stocktake judges skill *quality*.
 - `harness-sync` — use it to sync this skill to its public repo.
 - Usage measurement: `~/.claude/hooks/log-skill-usage.sh` → `~/.claude/metrics/skill-usage.jsonl` (a measurement layer independent of stocktake).
+
+## References
+
+The two-stage binary-question design (screen → verdict pressure-test, holistic verdict,
+no score aggregation) follows the checklist-decomposition evaluation line: BinEval
+"Ask, Don't Judge" ([arXiv:2606.27226](https://arxiv.org/abs/2606.27226)), CheckEval
+(arXiv:2403.18771), TICK (arXiv:2410.03608). Scores are deliberately not adopted:
+BinEval's own limitations show over-decomposition degrades correlation on holistic
+quality dimensions, and a satisfaction ratio would dilute a single dominant No.

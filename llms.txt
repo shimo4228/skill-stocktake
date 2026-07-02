@@ -7,6 +7,7 @@
 - [llms-full.txt](llms-full.txt): self-contained Q&A reference for AI agents (Project Facts, Prior Research, question-form H2 sections)
 - [README.md](README.md): human-facing narrative (install, modes, verdict criteria, requirements)
 - [SKILL.md](skills/skill-stocktake/SKILL.md): full slash-command specification — modes, four-phase flow, evaluation checklist, reason-quality rules
+- [hooks/log-skill-usage.sh](hooks/log-skill-usage.sh): bundled usage-measurement hook (Claude Code–specific; adaptable to other harnesses) with bats tests under tests/
 
 ## Architecture
 
@@ -14,6 +15,7 @@
 - Inventory via Glob (`~/.claude/skills/*/SKILL.md` + `learned/*.md`); dependency markdown under `.venv` / `.pytest_cache` is excluded structurally because Glob targets only skill definition files
 - Fully inline holistic evaluation — every skill read into one context so cross-skill overlap detection is accurate; no scan scripts and no subagent batching
 - Lean verdict ledger: `~/.claude/skills/skill-stocktake/results.json` (`{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`), updated inline
+- Usage measurement: bundled `hooks/log-skill-usage.sh` logs `invoke` / `read` / `slash` events to `~/.claude/metrics/skill-usage.jsonl`; `slash` (user-typed /skill, added 2026-07-03) closes the blind spot where command-message injection bypasses the Skill tool and Read
 - 4 phases: Inventory → Evaluation → Summary → Consolidation; Improve/Update verdicts hand off to Anthropic's official `skill-creator` skill
 
 ## Standard reference

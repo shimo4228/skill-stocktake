@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **Two-stage binary evaluation.** Phase 2 now runs a Stage 1 binary screen (per-skill Yes/No checklist; only No answers are surfaced) and, for non-Keep draft verdicts only, a Stage 2 pressure-test of 1-3 skill-specific refutation questions answered with one line of evidence each. A refuted defect falls back to Keep; a confirmed defect becomes the improvement list handed to skill-creator. Binary answers stay evidence for a holistic verdict — never aggregated into a score (BinEval arXiv:2606.27226; CheckEval; TICK).
+- **`slash` usage events.** The usage log now distinguishes `invoke` (Skill tool), `read` (skill-file Reads), and `slash` (user-typed `/skill` invocations captured at prompt submission). The slash path previously fired neither the Skill tool nor a Read — command-message injection made user-invocable skills systematically undercounted. Aggregation instructions state the 2026-07-03 boundary: earlier windows are lower bounds for user-invocable skills, and low usage alone must not Retire a slash-driven skill.
+- **Bundled measurement hook.** `hooks/log-skill-usage.sh` (Claude Code–specific: parses PostToolUse / UserPromptSubmit stdin JSON; plain bash + jq, adaptable to other harnesses) and its 14-test bats suite (`tests/log-skill-usage.bats`) now ship with the repo, with install/wiring instructions in the README.
+
 - **Aggregate-cost evaluation dimension.** The audit now weighs set-level library cost, not only per-skill quality: a large, uncurated library degrades skill selection and pulls behaviour toward the no-skill baseline, so the Keep bar rises with library size and a merely-adequate skill becomes a Retire/Merge candidate on aggregate-dilution grounds alone. A judgment input, never a quota. Grounded in 2026 skill-library benchmarks (Liu et al. arXiv:2604.04323; Li et al. arXiv:2602.12670; SkillOps arXiv:2605.13716) — see README "References".
 
 ## [2.0.0] - 2026-06-24

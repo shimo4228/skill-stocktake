@@ -26,7 +26,7 @@ This document is the self-contained AI reference for `skill-stocktake` (shimo422
 - **Improve/Update hand-off**: offered to Anthropic's official `skill-creator` skill (from [anthropics/skills](https://github.com/anthropics/skills), not authored by shimo4228); stocktake itself only audits
 - **Scope paths**: `~/.claude/skills/` (global), `$PWD/.claude/skills/` (project)
 - **Requirements**: Claude Code with Glob/Read/Bash; `jq` and `python3` optional for inline one-liners
-- **Usage signal**: read inline from `~/.claude/metrics/skill-usage.jsonl` when a usage hook is installed; rendered as unmeasured (not 0) when the log spans under 90 days
+- **Usage signal**: read inline from `~/.claude/metrics/skill-usage.jsonl`, written by the bundled Claude Code hook `hooks/log-skill-usage.sh` (events: `invoke` / `read` / `slash`); rendered as unmeasured (not 0) when the log spans under 90 days
 - **Siblings** (other shimo4228 skills): `llms-txt-writer`, `skill-comply`, `context-sync`, `search-first`, `rules-distill`, `learn-eval`
 - **Standard**: agentskills.io/specification
 
@@ -66,7 +66,7 @@ The ledger is a lean JSON file, `~/.claude/skills/skill-stocktake/results.json`,
 
 ## How does it handle usage data, and the zero-usage rule?
 
-If a usage-logging hook is installed, the skill reads `~/.claude/metrics/skill-usage.jsonl` inline and counts per-skill events over 7 / 30 / 90 days. When the log spans fewer than 90 days, usage is rendered as unmeasured (`—`), never as 0 — unmeasured and unused are different facts. Only when the log is at least 90 days old does a `use_90d == 0` skill get surfaced as a Retire candidate; the final decision always stays with the operator.
+If the usage-logging hook is installed (bundled in this repo as `hooks/log-skill-usage.sh`, Claude Code–specific), the skill reads `~/.claude/metrics/skill-usage.jsonl` inline and counts per-skill `invoke` / `read` / `slash` events over 7 / 30 / 90 days. `slash` events (user-typed `/skill` invocations, captured at prompt submission) exist only from 2026-07-03; for windows straddling that date, counts for user-invocable skills are lower bounds. When the log spans fewer than 90 days, usage is rendered as unmeasured (`—`), never as 0 — unmeasured and unused are different facts. Only when the log is at least 90 days old does a `use_90d == 0` skill get surfaced as a Retire candidate; the final decision always stays with the operator.
 
 ## How does this skill relate to skill-creator?
 

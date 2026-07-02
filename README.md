@@ -21,6 +21,38 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 /skills add shimo4228/skill-stocktake
 ```
 
+## Usage Measurement Hook (optional)
+
+The audit's usage column (7/30/90-day counts) reads `~/.claude/metrics/skill-usage.jsonl`. This repo bundles the hook that writes that log — `hooks/log-skill-usage.sh` — plus its bats test suite. Without it the audit still works; usage just renders as `—` (unmeasured).
+
+It logs three event types: `invoke` (Skill-tool calls), `read` (Reads of skill `.md` files), and `slash` (user-typed `/skill` invocations, captured at prompt submission — these bypass both the Skill tool and Read, so without this event user-invocable skills are systematically undercounted).
+
+> **Claude Code–specific.** The script parses Claude Code's hook payloads (PostToolUse / UserPromptSubmit JSON on stdin). It is ~90 lines of plain bash + `jq`, so users of other harnesses (Codex CLI, Gemini CLI, …) can adapt the field names and wiring to their own hook mechanism.
+
+### Install (Claude Code)
+
+```bash
+cp hooks/log-skill-usage.sh ~/.claude/hooks/
+```
+
+Then wire it in `~/.claude/settings.json` under both events:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      { "matcher": "Read|Skill",
+        "hooks": [{ "type": "command", "command": "bash ~/.claude/hooks/log-skill-usage.sh" }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "bash ~/.claude/hooks/log-skill-usage.sh" }] }
+    ]
+  }
+}
+```
+
+Verify with `bats tests/log-skill-usage.bats` (14 tests).
+
 ## Modes
 
 | Mode | Trigger | What it does |
@@ -32,8 +64,8 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 
 No scan scripts and no subagent batching — with a large context window the skill enumerates skills with Glob and reads them all into one context. That single-context view is what makes cross-skill overlap detection accurate.
 
-1. **Phase 1 — Inventory**: Glob `~/.claude/skills/*/SKILL.md` + `learned/*.md` (and project skills under `$PWD/.claude/skills/` if present). Because Glob targets only skill definition files, dependency markdown under `.venv` / `.pytest_cache` is excluded structurally — no pruning needed. Usage counts are read inline from `~/.claude/metrics/skill-usage.jsonl` if a usage hook is installed.
-2. **Phase 2 — Evaluation**: read every skill body and apply the checklist holistically — content overlap (a documented orchestrator/sub-skill split is *not* overlap), MEMORY/CLAUDE.md/rules overlap, reference freshness, usage frequency.
+1. **Phase 1 — Inventory**: Glob `~/.claude/skills/*/SKILL.md` + `learned/*.md` (and project skills under `$PWD/.claude/skills/` if present). Because Glob targets only skill definition files, dependency markdown under `.venv` / `.pytest_cache` is excluded structurally — no pruning needed. Usage counts are read inline from `~/.claude/metrics/skill-usage.jsonl` if the bundled usage hook is installed (see "Usage Measurement Hook").
+2. **Phase 2 — Evaluation**: read every skill body and apply a two-stage binary screen — Stage 1 is a per-skill Yes/No checklist (content overlap, where a documented orchestrator/sub-skill split is *not* overlap; MEMORY/CLAUDE.md/rules overlap; reference freshness; usage); Stage 2 generates skill-specific refutation questions that pressure-test any non-Keep draft verdict before it is finalized. Binary answers are evidence for a holistic verdict, never aggregated into a score.
 3. **Phase 3 — Summary**: a per-skill verdict table with self-contained reasons.
 4. **Phase 4 — Consolidation**: Retire/Merge act only after you confirm; Improve/Update are offered as a hand-off to Anthropic's official [`skill-creator`](https://github.com/anthropics/skills) skill, the improvement engine. The verdict ledger (`results.json`) is updated inline.
 

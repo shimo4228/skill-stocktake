@@ -21,6 +21,38 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 /skills add shimo4228/skill-stocktake
 ```
 
+## 使用計測 Hook（任意）
+
+監査の使用回数列（7/30/90 日カウント）は `~/.claude/metrics/skill-usage.jsonl` を読みます。このログを書く hook — `hooks/log-skill-usage.sh` — と bats テスト一式を本 repo に同梱しています。無くても監査は動作します（使用回数が `—`（未計測）になるだけ）。
+
+記録するイベントは 3 種類: `invoke`（Skill tool 呼び出し）、`read`（スキル `.md` の Read）、`slash`（ユーザーが `/skill` とタイプした起動。プロンプト送信時に捕捉 — この経路は Skill tool も Read も経由しないため、このイベント無しでは user-invocable スキルが系統的に過小計上されます）。
+
+> **Claude Code 専用。** スクリプトは Claude Code の hook ペイロード（stdin の PostToolUse / UserPromptSubmit JSON）を解析します。実体は素の bash + `jq` 約 90 行なので、他ハーネス（Codex CLI, Gemini CLI 等）のユーザーはフィールド名と配線を各自のフック機構に合わせて微修正すれば流用できます。
+
+### インストール（Claude Code）
+
+```bash
+cp hooks/log-skill-usage.sh ~/.claude/hooks/
+```
+
+`~/.claude/settings.json` の 2 つのイベントに配線します:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      { "matcher": "Read|Skill",
+        "hooks": [{ "type": "command", "command": "bash ~/.claude/hooks/log-skill-usage.sh" }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "bash ~/.claude/hooks/log-skill-usage.sh" }] }
+    ]
+  }
+}
+```
+
+`bats tests/log-skill-usage.bats`（14 テスト）で検証できます。
+
 ## モード
 
 | モード | トリガー | 動作 |
@@ -32,8 +64,8 @@ cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake
 
 スキャンスクリプトもサブエージェントのバッチ分割もありません。大きなコンテキストウィンドウを前提に、Glob でスキルを列挙し、全スキルを 1 つのコンテキストに読み込みます。この「一括して見る」視点こそが、スキル間の重複検出を正確にします。
 
-1. **Phase 1 — インベントリ**: `~/.claude/skills/*/SKILL.md` + `learned/*.md`（および `$PWD/.claude/skills/` があればプロジェクトスキル）を Glob で列挙。Glob はスキル定義ファイルのみを対象とするため、`.venv` / `.pytest_cache` 配下の依存 markdown は構造的に除外され、prune は不要です。使用回数は、使用ログ hook が導入されていれば `~/.claude/metrics/skill-usage.jsonl` をインラインで読み取ります。
-2. **Phase 2 — 評価**: 全スキル本文を読み、チェックリストを一括適用します — 内容重複（ドキュメント化された orchestrator/sub-skill の層分けは重複ではない）、MEMORY/CLAUDE.md/rules との重複、参照の鮮度、使用頻度。
+1. **Phase 1 — インベントリ**: `~/.claude/skills/*/SKILL.md` + `learned/*.md`（および `$PWD/.claude/skills/` があればプロジェクトスキル）を Glob で列挙。Glob はスキル定義ファイルのみを対象とするため、`.venv` / `.pytest_cache` 配下の依存 markdown は構造的に除外され、prune は不要です。使用回数は、同梱の使用計測 hook（「使用計測 Hook」節参照）が導入されていれば `~/.claude/metrics/skill-usage.jsonl` をインラインで読み取ります。
+2. **Phase 2 — 評価**: 全スキル本文を読み、2 段の binary スクリーンを適用します — Stage 1 はスキルごとの Yes/No チェックリスト（内容重複〔ドキュメント化された orchestrator/sub-skill の層分けは重複ではない〕、MEMORY/CLAUDE.md/rules との重複、参照の鮮度、使用頻度）、Stage 2 は非 Keep の暫定判定に対しスキル固有の反証質問を生成して確定前に圧力テストします。binary 回答は総合判定の証拠であり、スコアに集約しません。
 3. **Phase 3 — サマリー**: 自己完結した理由付きの判定テーブル。
 4. **Phase 4 — 統合**: Retire/Merge はユーザー確認後にのみ実行。Improve/Update は改善エンジンである Anthropic 純正の [`skill-creator`](https://github.com/anthropics/skills) へのハンドオフとして提示します。判定台帳（`results.json`）はインラインで更新します。
 
