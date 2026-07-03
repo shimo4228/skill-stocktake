@@ -67,7 +67,7 @@ cp hooks/log-skill-usage.sh ~/.claude/hooks/
 1. **Phase 1 — インベントリ**: `~/.claude/skills/*/SKILL.md` + `learned/*.md`（および `$PWD/.claude/skills/` があればプロジェクトスキル）を Glob で列挙。Glob はスキル定義ファイルのみを対象とするため、`.venv` / `.pytest_cache` 配下の依存 markdown は構造的に除外され、prune は不要です。使用回数は、同梱の使用計測 hook（「使用計測 Hook」節参照）が導入されていれば `~/.claude/metrics/skill-usage.jsonl` をインラインで読み取ります。
 2. **Phase 2 — 評価**: 全スキル本文を読み、2 段の binary スクリーンを適用します — Stage 1 はスキルごとの Yes/No チェックリスト（内容重複〔ドキュメント化された orchestrator/sub-skill の層分けは重複ではない〕、MEMORY/CLAUDE.md/rules との重複、参照の鮮度、使用頻度）、Stage 2 は非 Keep の暫定判定に対しスキル固有の反証質問を生成して確定前に圧力テストします。binary 回答は総合判定の証拠であり、スコアに集約しません。
 3. **Phase 3 — サマリー**: 自己完結した理由付きの判定テーブル。
-4. **Phase 4 — 統合**: Retire/Merge はユーザー確認後にのみ実行。Improve/Update は改善エンジンである Anthropic 純正の [`skill-creator`](https://github.com/anthropics/skills) へのハンドオフとして提示します。判定台帳（`results.json`）はインラインで更新します。
+4. **Phase 4 — 統合**: 非 Keep 候補は **1 件ずつ**確認します — 証拠を提示してから `[y/n/skip]` を聞き、一括承認はしません。Retire/Merge はそのファイルの確認後にのみ実行。Improve/Update はスキルごとに、改善エンジンである Anthropic 純正の [`skill-creator`](https://github.com/anthropics/skills) へのハンドオフとして提示します。判定台帳（`results.json`）はインラインで更新します。
 
 ## 判定基準
 

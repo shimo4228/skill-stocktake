@@ -132,13 +132,18 @@ Render a table: `Skill | 7d | 90d | Verdict | Reason`.
 
 ## Phase 4 — Consolidation
 
+**Confirm one by one** (config-gc's confirm-each design): walk the non-Keep candidates
+sequentially — for each, show the evidence first, then ask `[y/n/skip]`. Never batch the
+approval ("retire all 5? [y/n]" defeats the design — one skill, one decision). The user
+can stop at any point; `skip` records the verdict in the ledger unactioned.
+
 - **Retire / Merge**: per file, present (1) the specific defect found, (2) what covers the
   same need instead (Retire: which existing skill/rule; Merge: the target and what content
-  to integrate), (3) the impact of removal (dependent skills, MEMORY references). **Act only
-  after the user confirms.**
-- **Improve / Update**: **offer** to hand off — "Hand `<skill>` to skill-creator to improve?"
-  — and on approval invoke `skill-creator` with the target skill. Stocktake never does the
-  improvement work itself.
+  to integrate), (3) the impact of removal (dependent skills, MEMORY references) → ask
+  `[y/n/skip]`. **Act only after the user confirms that file.**
+- **Improve / Update**: **offer** per skill — "Hand `<skill>` to skill-creator to improve?
+  `[y/n/skip]`" — and on approval invoke `skill-creator` with the target skill. Stocktake
+  never does the improvement work itself.
 - **Update the ledger**: Read `results.json` → merge this run's verdicts → Write it back
   (`evaluated_at` = real UTC from `date -u +%Y-%m-%dT%H:%M:%SZ`). In `changed` mode, preserve
   the prior verdicts of skills you did not re-evaluate.
@@ -180,6 +185,7 @@ cached here).
 
 - `skill-creator` — the improvement engine; hand off Improve/Update work to it.
 - `config-gc` — GC over skill *existence* and the whole of ~/.claude (hooks/permissions/MCP/cache); stocktake judges skill *quality*.
+- `rules-stocktake` — the same audit for `~/.claude/rules/` (always-loaded layer; residency cost instead of usage).
 - `harness-sync` — use it to sync this skill to its public repo.
 - Usage measurement: `~/.claude/hooks/log-skill-usage.sh` → `~/.claude/metrics/skill-usage.jsonl` (a measurement layer independent of stocktake).
 

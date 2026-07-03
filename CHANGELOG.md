@@ -4,8 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **Confirm-each flow in Phase 4.** Non-Keep candidates are now confirmed one at a time — evidence first, then `[y/n/skip]` — with bulk approval explicitly banned (design borrowed from config-gc). `skip` records the verdict in the ledger unactioned. Related section now cross-references `rules-stocktake`, the sibling audit for always-loaded rules.
+
 ### Added
 
+- `scripts/sync-from-local.sh` — one-way export from the live Claude Code harness (vendored byte-identical across shimo4228 skill repos); the harness copy is canonical, this repository is the publication mirror.
 - **Two-stage binary evaluation.** Phase 2 now runs a Stage 1 binary screen (per-skill Yes/No checklist; only No answers are surfaced) and, for non-Keep draft verdicts only, a Stage 2 pressure-test of 1-3 skill-specific refutation questions answered with one line of evidence each. A refuted defect falls back to Keep; a confirmed defect becomes the improvement list handed to skill-creator. Binary answers stay evidence for a holistic verdict — never aggregated into a score (BinEval arXiv:2606.27226; CheckEval; TICK).
 - **`slash` usage events.** The usage log now distinguishes `invoke` (Skill tool), `read` (skill-file Reads), and `slash` (user-typed `/skill` invocations captured at prompt submission). The slash path previously fired neither the Skill tool nor a Read — command-message injection made user-invocable skills systematically undercounted. Aggregation instructions state the 2026-07-03 boundary: earlier windows are lower bounds for user-invocable skills, and low usage alone must not Retire a slash-driven skill.
 - **Bundled measurement hook.** `hooks/log-skill-usage.sh` (Claude Code–specific: parses PostToolUse / UserPromptSubmit stdin JSON; plain bash + jq, adaptable to other harnesses) and its 14-test bats suite (`tests/log-skill-usage.bats`) now ship with the repo, with install/wiring instructions in the README.
