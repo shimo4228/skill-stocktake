@@ -43,6 +43,12 @@ Enumerate skill definition files with Glob (no script needed):
 - `~/.claude/skills/learned/*.md`
 - if cwd has `.claude/skills/`, also `{cwd}/.claude/skills/*/SKILL.md` (project skills)
 
+**Canonical ledger keys**: a skill under `learned/` is keyed `learned/<name>` in
+`results.json` — never bare `<name>`. A rule or skill referencing a learned note by
+bare name does NOT make it a top-level skill (that mis-keying is how the 2026-07-05
+run double-counted 2 entries). On ledger merge, if both `learned/<name>` and bare
+`<name>` resolve to the same path, keep `learned/<name>` and delete the bare key.
+
 > Because Glob targets only `SKILL.md` / `learned/*.md`, dependency markdown under
 > `.venv` or `.pytest_cache` is excluded structurally (no pruning required). The
 > noise the old `find -name "*.md"` pulled in cannot occur.
@@ -186,6 +192,7 @@ cached here).
 - `skill-creator` — the improvement engine; hand off Improve/Update work to it.
 - `config-gc` — GC over skill *existence* and the whole of ~/.claude (hooks/permissions/MCP/cache); stocktake judges skill *quality*.
 - `rules-stocktake` — the same audit for `~/.claude/rules/` (always-loaded layer; residency cost instead of usage).
+- `repo-asset-stocktake` — the same stocktake pattern for a project repo's non-code assets (configs / workflows / runbooks); this skill audits installed *skills*.
 - `harness-sync` — use it to sync this skill to its public repo.
 - Usage measurement: `~/.claude/hooks/log-skill-usage.sh` → `~/.claude/metrics/skill-usage.jsonl` (a measurement layer independent of stocktake).
 
