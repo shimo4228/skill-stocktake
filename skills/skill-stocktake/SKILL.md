@@ -4,36 +4,61 @@ description: Audit installed Claude skills for quality and surface Keep/Improve/
 license: MIT
 metadata:
   author: shimo4228
-  version: "2.0"
+  version: "3.0"
   extracted: "2026-02-21"
 origin: shimo4228
 ---
 
 # skill-stocktake — Skill Quality Audit
 
-Evaluate installed skills **holistically, all in one context**, and assign each a
-verdict: `Keep / Improve / Update / Retire / Merge`. This skill does NOT do the
-improving — once it has a verdict, it **hands off to skill-creator (the improvement
-engine)**. That boundary is the point: stocktake is the quality gate, skill-creator
-is the fixer.
+Evaluate installed skills and assign each a verdict: `Keep / Improve / Update / Retire /
+Merge`. This skill does NOT do the improving — once it has a verdict, it **hands off to
+skill-creator (the improvement engine)**. That boundary is the point: stocktake is the
+quality gate, skill-creator is the fixer.
 
-> Design note: the old version shelled out to scan scripts and split evaluation into
-> ~20-skills-per-subagent batches. With a 1M context that is not just unnecessary but
-> harmful — batching blinds each subagent to skills in the other batches, so it misses
-> cross-skill overlap. Now we enumerate with Glob and read every skill into one context.
-> Overlap detection depends on that single-context view.
+> Design note (v3.0). v1 batched ~20 skills per subagent with no cross-batch view —
+> overlap was structurally invisible. v2.0 swung to everything-in-one-context on the
+> 1M-context premise. A 2026-07-13 controlled comparison falsified half of that premise:
+> the single-context pass had returned 84/84 Keep, while fresh-context batches with
+> **unconditional** reference verification surfaced 12/73 non-Keep (half with
+> deterministic evidence — 404 links, deleted files, retired CLI flags), and a dedicated
+> overlap probe reproduced the set-level dimension *without* needing all bodies in one
+> context (0 genuine duplications across 17 clusters, all documented layering).
+> Two mechanisms explained the gap: (1) per-item attention dilutes as the context fills,
+> and (2) a **conditional** verification trigger ("confirm if it looks stale") degrades
+> to "never verify" in a loaded context, because the trigger itself is a diluting
+> judgment. v3.0 is therefore a hybrid, split not by context length but by the property
+> being checked (see when-code-when-llm): deterministic checks are code-owned and
+> unconditional; per-item judgment gets narrow, dense contexts; set-level judgment gets
+> a light description sweep with targeted deep reads.
 
 ## Modes (`$ARGUMENTS`)
 
 | Argument | Behavior |
 |----------|----------|
-| none / `full` | Read and evaluate every skill (default) |
-| `changed` | Re-evaluate only skills whose `SKILL.md` mtime is newer than `results.json`'s `evaluated_at`; carry the rest forward from the ledger |
+| none / `full` | Evaluate every skill (default) |
+| `changed` | Re-evaluate only skills whose `SKILL.md` mtime is newer than `results.json`'s `evaluated_at`; carry the rest forward from the ledger. Phase 0 and Phase 3 still run over the full set (structural debt and overlap are set properties) |
 
 `changed` detects changes inline (no script):
 ```bash
 find ~/.claude/skills -name SKILL.md -newermt "$(jq -r .evaluated_at ~/.claude/skills/skill-stocktake/results.json)"
 ```
+
+## Phase 0 — Structural pre-pass (deterministic, code-owned)
+
+Run BEFORE any LLM judgment. These checks never ride on per-item attention:
+
+1. **skill-health scan** — dangling references / missing artifacts across the library
+   (run its scanner per `~/.claude/skills/skill-health/SKILL.md`). Mandatory, not
+   optional: this is the structural layer of Curate (ADR-0019 layering), and the v2.2
+   verification showed exactly these defects slipping through judgment-owned checks.
+2. **Ledger hygiene** — for every `results.json` entry: the path must exist on disk and
+   the key must follow the canonical rule below. Dedup violations (same path under two
+   keys → keep `learned/<name>`, delete the bare key). Entries whose path no longer
+   exists are removed (note them in the report as retired-from-disk).
+3. **Existence before judgment** — a skill that fails the existence check never reaches
+   Phase 2. Do not let an LLM assign Keep to a file that is not there (this happened:
+   two nonexistent paths carried Keep verdicts in the 2026-07-05 ledger).
 
 ## Phase 1 — Inventory
 
@@ -45,127 +70,139 @@ Enumerate skill definition files with Glob (no script needed):
 
 **Canonical ledger keys**: a skill under `learned/` is keyed `learned/<name>` in
 `results.json` — never bare `<name>`. A rule or skill referencing a learned note by
-bare name does NOT make it a top-level skill (that mis-keying is how the 2026-07-05
-run double-counted 2 entries). On ledger merge, if both `learned/<name>` and bare
-`<name>` resolve to the same path, keep `learned/<name>` and delete the bare key.
+bare name does NOT make it a top-level skill.
 
-> Because Glob targets only `SKILL.md` / `learned/*.md`, dependency markdown under
-> `.venv` or `.pytest_cache` is excluded structurally (no pruning required). The
-> noise the old `find -name "*.md"` pulled in cannot occur.
-
-**Usage counts**: read `~/.claude/metrics/skill-usage.jsonl` inline (the hook
-`log-skill-usage.sh` appends to it — an independent measurement layer, wired as
-PostToolUse `Read|Skill` + UserPromptSubmit) and count per-skill events over
-7 / 30 / 90 days. Each line is JSON `{ts,event,skill,path,project}`; count `invoke`,
-`read`, and `slash` events. Aggregate with a throwaway `python3`/`jq` one-liner
-rather than hand-counting — the log grows over time and hand-counting wastes a tool turn
-per invocation.
+**Usage counts** (parent-owned; batch agents never see them): read
+`~/.claude/metrics/skill-usage.jsonl` inline (the hook `log-skill-usage.sh` appends to
+it) and count per-skill events over 7 / 30 / 90 days. Aggregate with a throwaway
+`python3`/`jq` one-liner.
 
 - If the log is **missing or its first event is younger than 90 days**, render usage as
   `—` (unmeasured). **Never render it as 0** — unmeasured and unused are different facts.
-- `slash` events exist only from **2026-07-03** (before that, user-typed `/skill`
-  invocations were injected as command-messages and fired neither the Skill tool nor a
-  Read — invisible to the hook). For windows straddling that date, treat counts for
-  **user-invocable** skills as **lower bounds**, and never Retire on low usage alone
-  when the skill's primary mode is user-typed slash invocation.
+- `slash` events exist only from **2026-07-03**. For windows straddling that date, treat
+  counts for **user-invocable** skills as **lower bounds**, and never Retire on low
+  usage alone when the skill's primary mode is user-typed slash invocation.
 
 State the scan result up front: which paths were scanned, how many skills found, and
 whether usage is measurable.
 
-## Phase 2 — Evaluation (fully inline, holistic)
+## Phase 2 — Per-item scrutiny (parallel small batches, fresh contexts)
 
-Read the body of **every** target skill and evaluate them one by one while seeing the
-whole set.
+Split the target set into batches of **10–12 files**, interleaving `learned/` notes
+across batches, and launch **one subagent per batch in parallel**. Small batches are
+the point: per-item attention dilutes as a context fills, and the 84/84-Keep failure
+mode is exactly that dilution. Do NOT pass prior verdicts or the ledger to batch agents
+(anchoring); do NOT pass usage data (parent-owned dimension).
 
-**Stage 1 — binary screen (every skill).** Answer each item as an explicit Yes/No per
-skill. Record answers internally; **surface only the No answers** in the report — a
-wall of Yes rows changes no decision and buries the defects:
+Each batch agent applies, per skill:
 
-- [ ] No content overlap with other skills? (**a documented orchestrator/sub-skill split is NOT overlap** — e.g. paper-ecosystem → its reviewers, citation-sync → release-doi/wikidata. Distinguish intentional layering from genuine duplication)
-- [ ] No overlap with MEMORY.md / CLAUDE.md / rules?
-- [ ] Technical references current? (if CLI flags / APIs / tool names look stale, confirm with WebSearch)
-- [ ] Used within 90d? (skip this question entirely when usage is unmeasured — an unmeasured skill gets no usage answer, not a No)
+**Stage 1 — binary screen.** Explicit Yes/No per item; surface only the No answers:
 
-**Stage 2 — verdict pressure-test (non-Keep candidates only).** When Stage 1 plus the
-holistic read points to Improve / Update / Retire / Merge, generate **1–3 skill-specific
-atomic yes/no questions** that try to **refute the draft verdict** before finalizing it
-(e.g. "the script path referenced at L40 resolves on disk — Yes/No", "the overlap with
-X survives reading both bodies side by side, not just the descriptions — Yes/No", "the
-'stale' CLI flag is actually removed in the current tool version — Yes/No"). Answer each
-with one line of evidence (file read, path check, WebSearch).
+- [ ] Actionability: concrete steps/commands/examples you can act on?
+- [ ] Scope fit: name, trigger (description), and body aligned — not too broad or narrow?
+- [ ] Within-batch uniqueness: no content overlap with other skills in this batch?
+  (a documented orchestrator/sub-skill split is NOT overlap; cross-batch overlap is
+  Phase 3's job, not this agent's)
+- [ ] Currency: **unconditionally verify** every artifact the skill names — `ls` each
+  referenced path (`~/.claude/agents/<name>.md`, hooks, bundled scripts), run
+  `--help` / version checks for named CLI flags, fetch named URLs. "Verify if it looks
+  stale" is banned phrasing: the condition is what dilutes. Deterministically checkable
+  claims get deterministic checks, every time.
 
-- A refuted defect → the verdict falls back toward Keep. An confirmed defect → the No
-  answers become the **concrete improvement list handed to skill-creator** (Improve/Update)
-  or the removal rationale (Retire/Merge).
-- Keep-bound skills get **no** dynamic questions — at library scale, generating questions
-  for every skill bloats output without changing any verdict (the asymmetry with
-  learn-eval, which probes its single draft unconditionally, is deliberate).
+**Stage 2 — verdict pressure-test (non-Keep candidates only).** Generate 1–3
+skill-specific atomic yes/no questions that try to **refute the draft verdict** before
+finalizing it. Answer each with one line of evidence (file read, path check, WebSearch).
+A refuted defect → fall back toward Keep. A confirmed defect → the No answers become
+the concrete improvement list handed to skill-creator (Improve/Update) or the removal
+rationale (Retire).
 
 Evaluation is **holistic judgment, not a numeric rubric** — binary answers are evidence
 feeding the verdict, never aggregated into a score (a satisfaction ratio changes no
-decision here and dilutes a single dominant No). Guiding dimensions:
-Actionability (concrete examples/steps you can act on), Scope fit (name, trigger, and
-body aligned — not too broad or narrow), Uniqueness (not replaceable by MEMORY / another
-skill), Currency (references work in the current environment).
+decision and dilutes a single dominant No). Batch agents return structured verdicts
+with self-contained reasons; Keep-bound skills get no dynamic questions.
 
-**Aggregate cost (set-level, not per-skill):** holding a skill is not free even when the
-skill is individually fine. Skill benefits are fragile — a large, uncurated library
-degrades the agent's ability to select the right skill and pulls behaviour back toward the
-no-skill baseline. So the Keep bar **rises with library size**: when the set is large, a
-merely-adequate skill (rare use, low uniqueness, heavy adjacency to others) is a
-Retire/Merge candidate on aggregate-dilution grounds alone — independent of any defect in
-the skill itself. This is a judgment input, never a quota; do not retire to hit a number.
+## Phase 3 — Overlap probe (one dedicated agent, set-level)
+
+Cross-skill duplication is a set property; it gets a specialist, not a side effect.
+One agent, whole library:
+
+1. Read **name + description (+ heading structure)** of every target file — light pass.
+2. Propose candidate overlap clusters greedily (false positives are fine at this stage).
+3. For each candidate cluster, read the bodies side by side and judge:
+   - `GENUINE_DUPLICATION` — removing one loses nothing; name the Merge target
+   - `DOCUMENTED_LAYERING` — orchestrator→sub-skill, rule→skill, declared defer;
+     quote the defer line as evidence
+   - `ADJACENT_BUT_DISTINCT` — near domain, different job
+4. One extra pass over `~/.claude/rules/` and MEMORY.md: is a rule re-stating a skill
+   (or vice versa) beyond a declared pointer? Flag promotion residue (a learned note
+   whose content a rule has fully absorbed) as Retire/Merge candidates.
+
+Only `GENUINE_DUPLICATION` produces Merge verdicts. This probe is what replaces the
+v2.0 "everything in one context" rationale — it recovers the set-level view at
+description granularity plus targeted deep reads, without diluting Phase 2.
+
+## Phase 4 — Synthesis (parent)
+
+Merge Phase 2 verdicts, Phase 3 overlap verdicts, and parent-owned usage data:
+
+- **Zero-usage rule**: when the usage log's first event is at least 90 days old AND a
+  skill has `use_90d == 0`, surface it as a Retire candidate (final call is the user's).
+  While the log is younger than 90 days this rule does not fire.
+- **Aggregate cost (set-level)**: holding a skill is not free even when it is
+  individually fine. Skill benefits are fragile — a large, uncurated library degrades
+  skill selection and pulls behaviour back toward the no-skill baseline. The Keep bar
+  **rises with library size**: when the set is large, a merely-adequate skill (rare
+  use, low uniqueness, heavy adjacency) is a Retire/Merge candidate on
+  aggregate-dilution grounds alone. A judgment input, never a quota.
+- Conflicts (e.g. batch says Keep, probe says Merge) are resolved by the parent reading
+  the cited evidence, not by vote.
 
 | Verdict | Meaning |
 |---------|---------|
 | Keep | Useful, current, unique value |
 | Improve | Worth keeping, but specific improvements needed |
-| Update | Referenced technology is outdated (verify with WebSearch) |
+| Update | Referenced technology/artifact is outdated (verified, with evidence) |
 | Retire | Low quality, stale, or cost-asymmetric |
-| Merge into [X] | Substantial overlap with another skill; name the target |
+| Merge into [X] | Genuine duplication confirmed by the overlap probe; name the target |
 
-**Zero-usage rule**: when the usage log's first event is **at least 90 days old** AND a
-skill has `use_90d == 0`, it MUST be surfaced as a Retire candidate (the final call is
-the user's). While the log is younger than 90 days this rule does not fire, and verdicts
-fall back to holistic judgment alone.
-
-Evaluation is **origin-blind**: do not branch on ECC / self-authored / auto-extracted.
-The same checklist applies to every skill.
-
-## Phase 3 — Summary
+Evaluation is **origin-blind**: the same checklist applies to every skill.
 
 Render a table: `Skill | 7d | 90d | Verdict | Reason`.
 
-## Phase 4 — Consolidation
+## Phase 5 — Consolidation
 
 **Confirm one by one** (config-gc's confirm-each design): walk the non-Keep candidates
 sequentially — for each, show the evidence first, then ask `[y/n/skip]`. Never batch the
-approval ("retire all 5? [y/n]" defeats the design — one skill, one decision). The user
-can stop at any point; `skip` records the verdict in the ledger unactioned.
+approval. The user can stop at any point; `skip` records the verdict in the ledger
+unactioned.
 
-- **Retire / Merge**: per file, present (1) the specific defect found, (2) what covers the
-  same need instead (Retire: which existing skill/rule; Merge: the target and what content
-  to integrate), (3) the impact of removal (dependent skills, MEMORY references) → ask
-  `[y/n/skip]`. **Act only after the user confirms that file.**
-- **Improve / Update**: **offer** per skill — "Hand `<skill>` to skill-creator to improve?
-  `[y/n/skip]`" — and on approval invoke `skill-creator` with the target skill. Stocktake
-  never does the improvement work itself.
+- **Retire / Merge**: per file, present (1) the specific defect found, (2) what covers
+  the same need instead, (3) the impact of removal (dependent skills, rule pointers,
+  MEMORY references) → ask `[y/n/skip]`. **Act only after the user confirms that file.**
+- **Improve / Update**: **offer** per skill — "Hand `<skill>` to skill-creator?
+  `[y/n/skip]`" — and on approval invoke `skill-creator` with the target skill and the
+  No-answer list. Stocktake never does the improvement work itself.
 - **Update the ledger**: Read `results.json` → merge this run's verdicts → Write it back
-  (`evaluated_at` = real UTC from `date -u +%Y-%m-%dT%H:%M:%SZ`). In `changed` mode, preserve
-  the prior verdicts of skills you did not re-evaluate.
+  (`evaluated_at` = real UTC from `date -u +%Y-%m-%dT%H:%M:%SZ`). In `changed` mode,
+  preserve the prior verdicts of skills you did not re-evaluate.
 - If MEMORY.md exceeds 100 lines, propose compression.
 
 ## Reason quality (required)
 
-Every `reason` must be **self-contained** — decision-enabling on its own. "unchanged" alone
-is banned; always restate the evidence. For non-Keep verdicts, the reason cites the
-**No answers from the binary screen / pressure-test** (question + one-line evidence) —
-that is what makes it decision-enabling without re-reading the skill.
+Every `reason` must be **self-contained** — decision-enabling on its own. "unchanged"
+alone is banned; always restate the evidence. For non-Keep verdicts, the reason cites
+the **No answers from the binary screen / pressure-test** (question + one-line evidence).
 
-- **Retire**: state the defect + the replacement. Bad: `"Superseded"` / Good: `"disable-model-invocation: true already set; continuous-learning-v2 covers the same patterns plus confidence scoring. No unique content remains."`
-- **Merge**: name the target + what to integrate. Bad: `"Overlaps with X"` / Good: `"42-line thin content; Step 4 of chatlog-to-article already covers this workflow. Integrate the 'article angle' tip there as a note."`
-- **Improve**: which section, what change (target size if relevant). Bad: `"Too long"` / Good: `"276 lines; 'Framework Comparison' (L80–140) duplicates ai-era-architecture-principles. Delete it to reach ~150 lines."`
-- **Keep** (mtime-only change in `changed` mode): restate the original rationale. Bad: `"Unchanged"` / Good: `"Content unchanged. Unique Python reference explicitly imported by rules/python/; no overlap."`
+- **Retire**: state the defect + the replacement. Bad: `"Superseded"` / Good:
+  `"disable-model-invocation: true already set; continuous-learning-v2 covers the same
+  patterns plus confidence scoring. No unique content remains."`
+- **Merge**: name the target + what to integrate. Bad: `"Overlaps with X"` / Good:
+  `"42-line thin content; Step 4 of chatlog-to-article already covers this workflow.
+  Integrate the 'article angle' tip there as a note."`
+- **Improve**: which section, what change. Bad: `"Too long"` / Good: `"276 lines;
+  'Framework Comparison' (L80–140) duplicates ai-era-architecture-principles. Delete it
+  to reach ~150 lines."`
+- **Keep** (mtime-only change in `changed` mode): restate the original rationale.
 
 ## results.json (lean ledger)
 
@@ -184,17 +221,26 @@ that is what makes it decision-enabling without re-reading the skill.
 ```
 
 A ledger for verdict history and the last-audit timestamp only. Update it inline with
-Read/Write, not a script. Global skills only (project skills are read fresh from cwd, not
-cached here).
+Read/Write, not a script. Global skills only (project skills are read fresh from cwd,
+not cached here). Phase 0's hygiene rules (canonical keys, existing paths) are part of
+every write.
 
 ## Related
 
 - `skill-creator` — the improvement engine; hand off Improve/Update work to it.
-- `config-gc` — GC over skill *existence* and the whole of ~/.claude (hooks/permissions/MCP/cache); stocktake judges skill *quality*.
-- `rules-stocktake` — the same audit for `~/.claude/rules/` (always-loaded layer; residency cost instead of usage).
-- `repo-asset-stocktake` — the same stocktake pattern for a project repo's non-code assets (configs / workflows / runbooks); this skill audits installed *skills*.
+- `skill-health` — the deterministic structural layer; Phase 0 runs its scanner as a
+  mandatory pre-pass (enumerate-then-decide: code enumerates debt, judgment decides).
+- `config-gc` — GC over skill *existence* and the whole of ~/.claude; stocktake judges
+  skill *quality*.
+- `rules-stocktake` — the same audit for `~/.claude/rules/` (residency cost instead of
+  usage).
+- `repo-asset-stocktake` — the same stocktake pattern for a project repo's non-code
+  assets.
+- `when-code-when-llm` — the dividing line Phase 0/2/3 implement: deterministic checks
+  are code-owned and unconditional; judgment is holistic and narrow-context.
 - `harness-sync` — use it to sync this skill to its public repo.
-- Usage measurement: `~/.claude/hooks/log-skill-usage.sh` → `~/.claude/metrics/skill-usage.jsonl` (a measurement layer independent of stocktake).
+- Usage measurement: `~/.claude/hooks/log-skill-usage.sh` →
+  `~/.claude/metrics/skill-usage.jsonl` (a measurement layer independent of stocktake).
 
 ## References
 
@@ -204,3 +250,10 @@ no score aggregation) follows the checklist-decomposition evaluation line: BinEv
 (arXiv:2403.18771), TICK (arXiv:2410.03608). Scores are deliberately not adopted:
 BinEval's own limitations show over-decomposition degrades correlation on holistic
 quality dimensions, and a satisfaction ratio would dilute a single dominant No.
+
+The v3.0 hybrid architecture (deterministic pre-pass → fresh-context batches with
+unconditional verification → dedicated overlap probe) is grounded in a 2026-07-13
+controlled comparison on this library (n=73): the v2.0 single-context pass returned
+84/84 Keep while fresh-context batches surfaced 12/73 non-Keep (6 with deterministic
+evidence) and a dedicated probe confirmed 0 genuine duplications — i.e. per-item
+scrutiny dilutes in a loaded context, set-level judgment does not need one.

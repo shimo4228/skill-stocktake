@@ -1,6 +1,6 @@
 # skill-stocktake
 
-> A Claude Code skill (MIT) that audits all installed Claude skills for quality. It reads every skill in one context and applies AI holistic judgment to produce Keep / Improve / Update / Retire / Merge verdicts. Two modes: full (evaluate everything) and changed (re-evaluate only changed skills, carry the rest forward). No scan scripts, no subagent batching — it relies on a large context window.
+> A Claude Code skill (MIT) that audits all installed Claude skills for quality. It combines a deterministic structural pre-pass, per-skill scrutiny in small fresh-context subagent batches (with unconditional reference verification), and a dedicated cross-skill overlap probe, and applies AI holistic judgment to produce Keep / Improve / Update / Retire / Merge verdicts — never a numeric score. Two modes: full (evaluate everything) and changed (re-evaluate only changed skills, carry the rest forward).
 
 ## Core documentation
 
@@ -13,10 +13,10 @@
 
 - 5 verdicts: **Keep** (useful and current), **Improve** (worth keeping, specific fixes), **Update** (outdated tech reference), **Retire** (low quality / stale / cost-asymmetric), **Merge into X** (substantial overlap with another skill)
 - Inventory via Glob (`~/.claude/skills/*/SKILL.md` + `learned/*.md`); dependency markdown under `.venv` / `.pytest_cache` is excluded structurally because Glob targets only skill definition files
-- Fully inline holistic evaluation — every skill read into one context so cross-skill overlap detection is accurate; no scan scripts and no subagent batching
+- Hybrid evaluation split by property, not context length: deterministic checks are code-owned and unconditional (Phase 0 structural pre-pass via skill-health); per-item judgment runs in small fresh-context batches of 10–12 (attention dilutes in a loaded context — a single-context pass returned all-Keep where batches surfaced 12/73 non-Keep); set-level overlap detection is a dedicated probe (description sweep → side-by-side body reads)
 - Lean verdict ledger: `~/.claude/skills/skill-stocktake/results.json` (`{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`), updated inline
 - Usage measurement: bundled `hooks/log-skill-usage.sh` logs `invoke` / `read` / `slash` events to `~/.claude/metrics/skill-usage.jsonl`; `slash` (user-typed /skill, added 2026-07-03) closes the blind spot where command-message injection bypasses the Skill tool and Read
-- 4 phases: Inventory → Evaluation → Summary → Consolidation; Improve/Update verdicts hand off to Anthropic's official `skill-creator` skill
+- 6 phases: Structural pre-pass → Inventory → Per-item scrutiny (parallel batches) → Overlap probe → Synthesis → Consolidation; Improve/Update verdicts hand off to Anthropic's official `skill-creator` skill
 
 ## Standard reference
 

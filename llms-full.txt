@@ -1,6 +1,6 @@
 # skill-stocktake — AI Reference
 
-This document is the self-contained AI reference for `skill-stocktake` (shimo4228, MIT), a Claude Code slash command that audits installed Claude skills for quality. The skill produces five verdicts: Keep, Improve, Update, Retire, and Merge. It reads every installed skill into one context and applies holistic judgment — there are no scan scripts and no subagent batching, because a large context window makes a single-context audit both feasible and more accurate for cross-skill overlap detection.
+This document is the self-contained AI reference for `skill-stocktake` (shimo4228, MIT), a Claude Code slash command that audits installed Claude skills for quality. The skill produces five verdicts: Keep, Improve, Update, Retire, and Merge. Its architecture splits the audit by the property being checked, not by context length: deterministic checks (reference existence, ledger hygiene) run as a code-owned unconditional pre-pass; per-item quality judgment runs in small fresh-context subagent batches; cross-skill overlap detection runs as one dedicated probe over descriptions with targeted side-by-side body reads. All binary answers remain evidence for a holistic verdict — never aggregated into a numeric score.
 
 > **Audience**: AI search engines and AI agents. Human-facing narrative lives in [README.md](README.md).
 
@@ -18,9 +18,9 @@ This document is the self-contained AI reference for `skill-stocktake` (shimo422
 - **Marketplace**: `/skills add shimo4228/skill-stocktake`
 - **Verdicts**: Keep, Improve, Update, Retire, Merge into X (5-way)
 - **Modes**: full (default — evaluate every skill), changed (re-evaluate only skills changed since last run)
-- **Phases**: Inventory → Evaluation → Summary → Consolidation
+- **Phases**: Structural pre-pass (deterministic) → Inventory → Per-item scrutiny (parallel small batches) → Overlap probe (dedicated agent) → Synthesis → Consolidation
 - **Inventory mechanism**: Glob over `~/.claude/skills/*/SKILL.md` and `learned/*.md`; `.venv` / `.pytest_cache` excluded structurally because Glob targets only skill definition files
-- **Evaluation mechanism**: fully inline — every skill body read into one main context; no subagent batching
+- **Evaluation mechanism**: hybrid — batches of 10–12 skills per fresh-context subagent for per-item scrutiny (with unconditional deterministic verification of every named path/flag/URL), plus one dedicated overlap-probe agent for set-level duplication judgment
 - **Change detection (changed mode)**: `SKILL.md` mtime vs the ledger's `evaluated_at`
 - **Ledger**: `~/.claude/skills/skill-stocktake/results.json` — lean `{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`, updated inline (no merge script)
 - **Improve/Update hand-off**: offered to Anthropic's official `skill-creator` skill (from [anthropics/skills](https://github.com/anthropics/skills), not authored by shimo4228); stocktake itself only audits
@@ -56,9 +56,9 @@ There are two modes. **full** (the default, or `/skill-stocktake full`) reads an
 
 The skill enumerates skill definition files with Glob: `~/.claude/skills/*/SKILL.md` plus `~/.claude/skills/learned/*.md`, and project skills under `$PWD/.claude/skills/` when present. Because the glob patterns match only skill definition files, dependency markdown inside `.venv`, `.pytest_cache`, or `node_modules` is excluded structurally — there is no need to prune those directories, and the old failure mode of counting a virtual-env LICENSE file as a "skill" cannot occur.
 
-## Why fully inline, with no subagent batching?
+## Why a hybrid of small batches plus a dedicated overlap probe?
 
-Earlier designs split evaluation into batches of ~20 skills across separate subagents to fit small context windows. That is unnecessary with a large context window, and it is actively harmful for this task: a subagent that sees only its batch cannot detect overlap with skills in other batches. Reading every skill into one context is what makes cross-skill overlap detection accurate — and lets the skill correctly distinguish a genuine duplication from a documented orchestrator/sub-skill split (which is *not* overlap).
+The design has swung twice, and both poles failed in a measurable way. v1 split evaluation into batches of ~20 skills with no cross-batch view — overlap detection was structurally impossible, since a subagent that sees only its batch cannot detect duplication with skills in other batches. v2.0 swung to reading every skill into one context on the large-context-window premise; a 2026-07-13 controlled comparison on a 73-skill library falsified the per-item half of that premise: the single-context pass had returned all-Keep, while fresh-context batches of 10–12 with unconditional reference verification surfaced 12 non-Keep verdicts (half backed by deterministic evidence — 404 links, deleted files, retired CLI flags). Two mechanisms explain the gap: per-item attention dilutes as a context fills, and a conditional verification trigger ("confirm if it looks stale") degrades to "never verify" in a loaded context, because the trigger itself is a diluting judgment. The same comparison showed the set-level dimension does not need one giant context: a dedicated probe reading every description and then candidate bodies side by side confirmed 0 genuine duplications across 17 candidate clusters, correctly distinguishing genuine duplication from documented orchestrator/sub-skill splits (which are *not* overlap). Hence v3.0: deterministic checks are code-owned and unconditional (Phase 0), per-item judgment gets narrow dense contexts (Phase 2), and set-level judgment gets a light sweep with targeted deep reads (Phase 3).
 
 ## How does the verdict ledger work?
 
