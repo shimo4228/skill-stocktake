@@ -12,9 +12,10 @@ origin: shimo4228
 # skill-stocktake — Skill Quality Audit
 
 Evaluate installed skills and assign each a verdict: `Keep / Improve / Update / Retire /
-Merge`. This skill does NOT do the improving — once it has a verdict, it **hands off to
-skill-creator (the improvement engine)**. That boundary is the point: stocktake is the
-quality gate, skill-creator is the fixer.
+Merge`, plus `Out of scope` for skills this harness does not own (Phase 0). This skill
+does NOT do the improving — once it has a verdict, it **hands off to skill-creator (the
+improvement engine)**. That boundary is the point: stocktake is the quality gate,
+skill-creator is the fixer.
 
 > Design note (v3.0). v1 batched ~20 skills per subagent with no cross-batch view —
 > overlap was structurally invisible. v2.0 swung to everything-in-one-context on the
@@ -59,6 +60,16 @@ Run BEFORE any LLM judgment. These checks never ride on per-item attention:
 3. **Existence before judgment** — a skill that fails the existence check never reaches
    Phase 2. Do not let an LLM assign Keep to a file that is not there (this happened:
    two nonexistent paths carried Keep verdicts in the 2026-07-05 ledger).
+4. **Ownership before judgment** — the same skill-health run reports `external`: skills
+   whose directory is a symlink out of the skills root (a package manager's tree, a
+   sibling checkout). **These do not get an Improve/Update verdict.** Record them as
+   `Out of scope` with the owner and real path in the reason, and route any real defect
+   **upstream** (issue / PR). A verdict here is not actionable — an edit lands in
+   someone else's tree, never reaches git, and disappears on their next upgrade.
+   Live miss on 2026-07-25: `hunk-review` drew an Improve for a stale flag table and the
+   fix was written into `/opt/homebrew/Cellar/hunk/0.17.1/…`; it was reverted and filed
+   as [modem-dev/hunk#595](https://github.com/modem-dev/hunk/issues/595). The check is
+   fully structural (`is_symlink()`), so it belongs in code, never in per-item attention.
 
 ## Phase 1 — Inventory
 
@@ -238,6 +249,8 @@ every write.
   assets.
 - `when-code-when-llm` — the dividing line Phase 0/2/3 implement: deterministic checks
   are code-owned and unconditional; judgment is holistic and narrow-context.
+- `llm-as-judge` — the generic judge design canon (binary screen → pressure-test →
+  holistic named verdict, no aggregation); Phase 2 is its library-scale implementation.
 - `harness-sync` — use it to sync this skill to its public repo.
 - Usage measurement: `~/.claude/hooks/log-skill-usage.sh` →
   `~/.claude/metrics/skill-usage.jsonl` (a measurement layer independent of stocktake).
