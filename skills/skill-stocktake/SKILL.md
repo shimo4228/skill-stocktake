@@ -245,6 +245,11 @@ every write.
   skill *quality*.
 - `rules-stocktake` — the same audit for `~/.claude/rules/` (residency cost instead of
   usage).
+- `agent-stocktake` — the third sibling, for `~/.claude/agents/` (hybrid cost model:
+  description = residency, body = invocation).
+- `generation-audit` — on a model-generation change, collects runtime-layer evidence
+  (conflict / redundancy / drift) and hands the skills slice to Phase 4 synthesis as
+  external evidence (read, never require).
 - `repo-asset-stocktake` — the same stocktake pattern for a project repo's non-code
   assets.
 - `when-code-when-llm` — the dividing line Phase 0/2/3 implement: deterministic checks
