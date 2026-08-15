@@ -210,8 +210,32 @@ Merge Phase 2 verdicts, Phase 3 overlap / contradiction verdicts, and parent-own
   **trigger is broken**, which is an Improve on the description, not a Retire. A skill
   that fires a few times a year and last fired at the last release is behaving
   correctly. Same number, opposite verdict; only the expected cadence separates them.
-- **Zero deliberate use plus a confirmed defect is the real Retire signal.** Neither
-  half alone is enough.
+- **The Retire signal is a conjunction — all three, not any one.** Write it as an AND or
+  it over-produces (measured below):
+  1. **Zero deliberate use** over the log's real span.
+  2. **Observed cadence contradicts the cadence the description implies** — the previous
+     bullet. A seasonal skill sitting at zero between releases satisfies (1) and fails
+     this one.
+  3. **The defect is one of fit, not freshness.** A wrong scope, an unreachable trigger,
+     or a niche another component is actually serving is a fit defect. A stale version
+     pin or a dead pointer is a freshness defect — that is an Update, and it says nothing
+     about whether the skill should exist.
+
+  Worked measurement, 2026-08-15 (n=65). Condition (1) alone: 21 skills. (1) AND "has a
+  confirmed defect", the loose form this bullet used to be written in: **9 skills** —
+  including `paper-writing`, `paper-ecosystem` and `e2e`, all behaving correctly. Adding
+  (2) and (3): **2 skills**.
+  - `agent-architecture-audit` — its description claims "any LLM-powered feature", the
+    widest trigger in the library, and it fired zero times in 66 days. Maximal claimed
+    cadence against zero observed is the cleanest possible failure of (2).
+  - `council` — `grill-me` took 46 deliberate uses in the same pre-build deliberation
+    niche while `council` took zero, *and* `grill-me`'s body explicitly routes to it
+    ("a clean choice between two known options → use `council`"). A declared handoff that
+    never fires in 66 days means the receiving case does not arise on its own.
+
+  Note what (3) excludes. Nine of today's Improve/Update verdicts were freshness defects
+  found by the currency check; none of them bear on existence. Do not let a productive
+  currency pass inflate the Retire list.
 - **Aggregate cost (set-level)**: holding a skill is not free even when it is
   individually fine. Skill benefits are fragile — a large, uncurated library degrades
   skill selection and pulls behaviour back toward the no-skill baseline. The Keep bar
