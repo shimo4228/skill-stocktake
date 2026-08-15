@@ -29,7 +29,7 @@ skill-creator is the fixer.
 > and (2) a **conditional** verification trigger ("confirm if it looks stale") degrades
 > to "never verify" in a loaded context, because the trigger itself is a diluting
 > judgment. v3.0 is therefore a hybrid, split not by context length but by the property
-> being checked (see when-code-when-llm): deterministic checks are code-owned and
+> being checked: deterministic checks are code-owned and
 > unconditional; per-item judgment gets narrow, dense contexts; set-level judgment gets
 > a light description sweep with targeted deep reads.
 
@@ -38,7 +38,7 @@ skill-creator is the fixer.
 | Argument | Behavior |
 |----------|----------|
 | none / `full` | Evaluate every skill (default) |
-| `changed` | Re-evaluate only skills whose `SKILL.md` mtime is newer than `results.json`'s `evaluated_at`; carry the rest forward from the ledger. Phase 0 and Phase 3 still run over the full set (structural debt and overlap are set properties) |
+| `changed` | Re-evaluate only skills whose `SKILL.md` mtime is newer than `results.json`'s `evaluated_at`; carry the rest forward from the ledger. Phase 0 and Phase 3 still run over the full set (structural debt, overlap, and contradiction are set properties) |
 
 `changed` detects changes inline (no script):
 ```bash
@@ -85,14 +85,25 @@ bare name does NOT make it a top-level skill.
 
 **Usage counts** (parent-owned; batch agents never see them): read
 `~/.claude/metrics/skill-usage.jsonl` inline (the hook `log-skill-usage.sh` appends to
-it) and count per-skill events over 7 / 30 / 90 days. Aggregate with a throwaway
-`python3`/`jq` one-liner.
+it) and count per-skill events over 7 / 30 / 90 days plus the last-used date. Aggregate
+with a throwaway `python3`/`jq` one-liner.
 
-- If the log is **missing or its first event is younger than 90 days**, render usage as
-  `—` (unmeasured). **Never render it as 0** — unmeasured and unused are different facts.
-- `slash` events exist only from **2026-07-03**. For windows straddling that date, treat
-  counts for **user-invocable** skills as **lower bounds**, and never Retire on low
-  usage alone when the skill's primary mode is user-typed slash invocation.
+Three corrections that decide whether the number means anything (all three were live
+defects found on 2026-08-15):
+
+- **Split by event type; never sum them.** `slash` = the user typed it. `invoke` = the
+  model selected it. `read` = a file was opened, which carries no intent. Only
+  `slash + invoke` is *deliberate use*. Summing all three makes a never-chosen skill
+  look busy.
+- **Exclude this audit's own reads.** Phase 2 opens every `SKILL.md`, so a run that
+  counts `read` events marks the whole library as used *by having audited it*. Drop
+  events from the current day (or from this run's window) before counting.
+- **`slash` events exist only from 2026-07-03.** For windows straddling that date,
+  treat counts for **user-invocable** skills as lower bounds.
+
+If the log is **missing**, render usage as `—` (unmeasured). **Never render it as 0** —
+unmeasured and unused are different facts. If the log is younger than the widest window,
+say so and label that column with the log's real span rather than the nominal one.
 
 State the scan result up front: which paths were scanned, how many skills found, and
 whether usage is measurable.
@@ -113,7 +124,8 @@ Each batch agent applies, per skill:
 - [ ] Scope fit: name, trigger (description), and body aligned — not too broad or narrow?
 - [ ] Within-batch uniqueness: no content overlap with other skills in this batch?
   (a documented orchestrator/sub-skill split is NOT overlap; cross-batch overlap is
-  Phase 3's job, not this agent's)
+  Phase 3's job, not this agent's — the same goes for contradictions with skills outside
+  this batch)
 - [ ] Currency: **unconditionally verify** every artifact the skill names — `ls` each
   referenced path (`~/.claude/agents/<name>.md`, hooks, bundled scripts), run
   `--help` / version checks for named CLI flags, fetch named URLs. "Verify if it looks
@@ -132,15 +144,19 @@ feeding the verdict, never aggregated into a score (a satisfaction ratio changes
 decision and dilutes a single dominant No). Batch agents return structured verdicts
 with self-contained reasons; Keep-bound skills get no dynamic questions.
 
-## Phase 3 — Overlap probe (one dedicated agent, set-level)
+## Phase 3 — Overlap and contradiction probe (one dedicated agent, set-level)
 
-Cross-skill duplication is a set property; it gets a specialist, not a side effect.
-One agent, whole library:
+Duplication **and contradiction** are set properties; they get a specialist, not a side
+effect. A per-item batch cannot see either — each agent reads only its own 10 files and
+finds nothing wrong with any of them individually. One agent, whole library:
 
 1. Read **name + description (+ heading structure)** of every target file — light pass.
-2. Propose candidate overlap clusters greedily (false positives are fine at this stage).
+2. Propose candidate clusters greedily (false positives are fine at this stage).
 3. For each candidate cluster, read the bodies side by side and judge:
    - `GENUINE_DUPLICATION` — removing one loses nothing; name the Merge target
+   - `CONTRADICTION` — two skills that can both load give **opposite instructions for the
+     same situation**, or a sub-skill's content violates the canon it defers to. Quote
+     both sides. See the contradiction checks below.
    - `DOCUMENTED_LAYERING` — orchestrator→sub-skill, rule→skill, declared defer;
      quote the defer line as evidence
    - `ADJACENT_BUT_DISTINCT` — near domain, different job
@@ -148,17 +164,54 @@ One agent, whole library:
    (or vice versa) beyond a declared pointer? Flag promotion residue (a learned note
    whose content a rule has fully absorbed) as Retire/Merge candidates.
 
-Only `GENUINE_DUPLICATION` produces Merge verdicts. This probe is what replaces the
-v2.0 "everything in one context" rationale — it recovers the set-level view at
-description granularity plus targeted deep reads, without diluting Phase 2.
+### Contradiction checks (a declared boundary is a claim, not evidence)
+
+`DOCUMENTED_LAYERING` certifies "not duplicated". It does **not** certify "not
+contradictory", and a quoted defer line is the start of the check, not the end. For every
+cluster labelled `DOCUMENTED_LAYERING`, run all three:
+
+- **Does the subordinate file comply with the canon it defers to?** Read the canonical
+  file's rules and look for the subordinate stating a *different* rule for the same
+  decision — especially **defaults** ("if the user gives no X, use Y"), which contradict
+  quietly because they only fire in the unspecified case.
+- **Is the defer bidirectional?** A one-directional defer (canon claims the subordinate,
+  subordinate says nothing) means the subordinate **loads alone without its correction**
+  whenever its own description wins the trigger. A broad description on a subordinate
+  file turns a latent contradiction into an active one.
+- **Do the two files presuppose the same author / project model?** Imported skills
+  (`origin` = an external repo) carry their author's premises. A conflict of premises
+  reads as a normal-looking instruction and survives every per-file check.
+
+`GENUINE_DUPLICATION` produces Merge verdicts. `CONTRADICTION` produces Improve (add the
+missing defer, delete the conflicting rule, narrow the trigger) or, when the premises
+themselves clash and the subordinate never fires on its own, Retire-and-absorb — name
+what must move before deletion.
+
+> Worked case, 2026-08-15: `article-writing` (origin: ECC) defaulted to "operator-style
+> voice" absent supplied examples, while `writing-ecosystem` — which declared itself its
+> canon — mandates 発見調. The defer existed only on the canon side, so a direct fire of
+> `article-writing` would have installed the opposing default alone. The probe had
+> labelled the pair `DOCUMENTED_LAYERING` on the strength of the quoted defer line.
+> Verdict: Retire-and-absorb. This section exists because that pass missed it.
 
 ## Phase 4 — Synthesis (parent)
 
-Merge Phase 2 verdicts, Phase 3 overlap verdicts, and parent-owned usage data:
+Merge Phase 2 verdicts, Phase 3 overlap / contradiction verdicts, and parent-owned usage data:
 
-- **Zero-usage rule**: when the usage log's first event is at least 90 days old AND a
-  skill has `use_90d == 0`, surface it as a Retire candidate (final call is the user's).
-  While the log is younger than 90 days this rule does not fire.
+- **Usage is rendered, never thresholded.** There is no zero-usage rule and no window
+  that auto-nominates a skill. Put the deliberate-use counts and the last-used date in
+  the table and let judgment read them. A threshold compresses the signal to one bit and
+  throws away the part that decides the call — 2026-08-15: 21 of 65 skills had zero
+  deliberate use, a list that would have been useless as candidates (it is mostly
+  seasonal skills like `paper-deposit` and `release-doi`) but was highly informative
+  read as numbers.
+- **Compare observed cadence against the cadence the skill's own description implies.**
+  A skill that should fire weekly and has not fired in a month is not unwanted — its
+  **trigger is broken**, which is an Improve on the description, not a Retire. A skill
+  that fires a few times a year and last fired at the last release is behaving
+  correctly. Same number, opposite verdict; only the expected cadence separates them.
+- **Zero deliberate use plus a confirmed defect is the real Retire signal.** Neither
+  half alone is enough.
 - **Aggregate cost (set-level)**: holding a skill is not free even when it is
   individually fine. Skill benefits are fragile — a large, uncurated library degrades
   skill selection and pulls behaviour back toward the no-skill baseline. The Keep bar
@@ -174,11 +227,14 @@ Merge Phase 2 verdicts, Phase 3 overlap verdicts, and parent-owned usage data:
 | Improve | Worth keeping, but specific improvements needed |
 | Update | Referenced technology/artifact is outdated (verified, with evidence) |
 | Retire | Low quality, stale, or cost-asymmetric |
-| Merge into [X] | Genuine duplication confirmed by the overlap probe; name the target |
+| Merge into [X] | Genuine duplication confirmed by the probe; name the target |
+| Retire-and-absorb | A `CONTRADICTION` whose premises clash and whose subordinate never fires on its own; name what must move into the canon before deletion |
 
 Evaluation is **origin-blind**: the same checklist applies to every skill.
 
-Render a table: `Skill | 7d | 90d | Verdict | Reason`.
+Render a table: `Skill | 7d | 30d | 90d | last used | Verdict | Reason`, where the counts
+are **deliberate use only** (`slash + invoke`). State the log's real span next to the
+widest column.
 
 ## Phase 5 — Consolidation
 
@@ -252,8 +308,6 @@ every write.
   external evidence (read, never require).
 - `repo-asset-stocktake` — the same stocktake pattern for a project repo's non-code
   assets.
-- `when-code-when-llm` — the dividing line Phase 0/2/3 implement: deterministic checks
-  are code-owned and unconditional; judgment is holistic and narrow-context.
 - `llm-as-judge` — the generic judge design canon (binary screen → pressure-test →
   holistic named verdict, no aggregation); Phase 2 is its library-scale implementation.
 - `harness-sync` — use it to sync this skill to its public repo.
