@@ -88,8 +88,8 @@ bare name does NOT make it a top-level skill.
 it) and count per-skill events over 7 / 30 / 90 days plus the last-used date. Aggregate
 with a throwaway `python3`/`jq` one-liner.
 
-Three corrections that decide whether the number means anything (all three were live
-defects found on 2026-08-15):
+Four corrections that decide whether the number means anything (the first three were
+live defects found on 2026-08-15, the fourth on 2026-08-17):
 
 - **Split by event type; never sum them.** `slash` = the user typed it. `invoke` = the
   model selected it. `read` = a file was opened, which carries no intent. Only
@@ -100,6 +100,13 @@ defects found on 2026-08-15):
   events from the current day (or from this run's window) before counting.
 - **`slash` events exist only from 2026-07-03.** For windows straddling that date,
   treat counts for **user-invocable** skills as lower bounds.
+- **Drop `sandbox: true` rows.** They are the trace of skill-comply's compliance test
+  making a sandboxed child session call the skill — a synthetic scenario, not use.
+  Counting them makes exactly the skills under compliance test look busy. The tag exists
+  only from 2026-08-17 (`log-skill-usage.sh` schema comment); older rows carry no tag, so
+  for windows reaching before that date also drop rows whose `project` is under
+  `/tmp/skill-comply-sandbox` or `/private/tmp/skill-comply-sandbox` (e.g.
+  `select(.sandbox != true and ((.project // "") | test("^(/private)?/tmp/skill-comply-sandbox(/|$)") | not))`).
 
 If the log is **missing**, render usage as `—` (unmeasured). **Never render it as 0** —
 unmeasured and unused are different facts. If the log is younger than the widest window,
