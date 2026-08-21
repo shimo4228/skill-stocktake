@@ -337,6 +337,8 @@ every write.
 - `generation-audit` — on a model-generation change, collects runtime-layer evidence
   (conflict / redundancy / drift) and hands the skills slice to Phase 4 synthesis as
   external evidence (read, never require).
+- `harness-boundary` — design-time lens (layer / portability / obsolescence) for proposed
+  mechanisms; applied to an installed skill, its Delete / Move are Phase 4 evidence only.
 - `repo-asset-stocktake` — the same stocktake pattern for a project repo's non-code
   assets.
 - `llm-as-judge` — the generic judge design canon (binary screen → pressure-test →
