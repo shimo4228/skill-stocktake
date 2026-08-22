@@ -125,7 +125,9 @@ mode is exactly that dilution. Do NOT pass prior verdicts or the ledger to batch
 
 Each batch agent applies, per skill:
 
-**Stage 1 — binary screen.** Explicit Yes/No per item; surface only the No answers:
+**Stage 1 — binary screen.** Explicit Yes/No per item; surface only the No answers
+(these four questions are the canonical set — `skill-creator` §4 reuses them for its
+creation-time draft gate by reference, not by copy):
 
 - [ ] Actionability: concrete steps/commands/examples you can act on?
 - [ ] Scope fit: name, trigger (description), and body aligned — not too broad or narrow?
