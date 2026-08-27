@@ -4,7 +4,7 @@ description: Audit installed Claude skills for quality and surface Keep/Improve/
 license: MIT
 metadata:
   author: shimo4228
-  version: "3.0"
+  version: "3.1"
   extracted: "2026-02-21"
 origin: shimo4228
 ---
@@ -17,21 +17,12 @@ does NOT do the improving — once it has a verdict, it **hands off to skill-cre
 improvement engine)**. That boundary is the point: stocktake is the quality gate,
 skill-creator is the fixer.
 
-> Design note (v3.0). v1 batched ~20 skills per subagent with no cross-batch view —
-> overlap was structurally invisible. v2.0 swung to everything-in-one-context on the
-> 1M-context premise. A 2026-07-13 controlled comparison falsified half of that premise:
-> the single-context pass had returned 84/84 Keep, while fresh-context batches with
-> **unconditional** reference verification surfaced 12/73 non-Keep (half with
-> deterministic evidence — 404 links, deleted files, retired CLI flags), and a dedicated
-> overlap probe reproduced the set-level dimension *without* needing all bodies in one
-> context (0 genuine duplications across 17 clusters, all documented layering).
-> Two mechanisms explained the gap: (1) per-item attention dilutes as the context fills,
-> and (2) a **conditional** verification trigger ("confirm if it looks stale") degrades
-> to "never verify" in a loaded context, because the trigger itself is a diluting
-> judgment. v3.0 is therefore a hybrid, split not by context length but by the property
-> being checked: deterministic checks are code-owned and
-> unconditional; per-item judgment gets narrow, dense contexts; set-level judgment gets
-> a light description sweep with targeted deep reads.
+> Design note (v3.1). Per-item quality/freshness and set-level existence/overlap are
+> different properties. Deterministic checks are code-owned and unconditional;
+> per-item judgment gets narrow, fresh contexts; set-level judgment gets a light
+> description sweep with targeted deep reads. Historical verdict counts and named past
+> outcomes stay in git history, not in this operational prompt: prior outcomes anchor a
+> new audit toward reproducing them instead of judging the current library.
 
 ## Modes (`$ARGUMENTS`)
 
@@ -55,7 +46,7 @@ Run BEFORE any LLM judgment. These checks never ride on per-item attention:
    verification showed exactly these defects slipping through judgment-owned checks.
 2. **Ledger hygiene** — for every `results.json` entry: the path must exist on disk and
    the key must follow the canonical rule below. Dedup violations (same path under two
-   keys → keep `learned/<name>`, delete the bare key). Entries whose path no longer
+   keys → keep the canonical key, delete the duplicate). Entries whose path no longer
    exists are removed (note them in the report as retired-from-disk).
 3. **Existence before judgment** — a skill that fails the existence check never reaches
    Phase 2. Do not let an LLM assign Keep to a file that is not there (this happened:
@@ -76,52 +67,64 @@ Run BEFORE any LLM judgment. These checks never ride on per-item attention:
 Enumerate skill definition files with Glob (no script needed):
 
 - `~/.claude/skills/*/SKILL.md`
-- `~/.claude/skills/learned/*.md`
 - if cwd has `.claude/skills/`, also `{cwd}/.claude/skills/*/SKILL.md` (project skills)
 
-**Canonical ledger keys**: a skill under `learned/` is keyed `learned/<name>` in
-`results.json` — never bare `<name>`. A rule or skill referencing a learned note by
-bare name does NOT make it a top-level skill.
+**Canonical ledger keys**: one key per skill directory name, matching the path on disk.
+(`skills/learned/` was retired on 2026-08-23, ADR-0047 — the `learned/<name>` key form no
+longer applies. A rule or skill referencing a name in prose does NOT make it a skill.)
 
-**Usage counts** (parent-owned; batch agents never see them): read
-`~/.claude/metrics/skill-usage.jsonl` inline (the hook `log-skill-usage.sh` appends to
-it) and count per-skill events over 7 / 30 / 90 days plus the last-used date. Aggregate
-with a throwaway `python3`/`jq` one-liner.
+**Usage evidence** (parent-owned; batch agents never see it). Step 0 — run the script and
+transcribe the numbers; do not re-derive them by hand:
 
-Four corrections that decide whether the number means anything (the first three were
-live defects found on 2026-08-15, the fourth on 2026-08-17):
+```bash
+uv run --project ~/.claude/skills/skill-stocktake python -m scripts.usage_stats --days 14
+```
 
-- **Split by event type; never sum them.** `slash` = the user typed it. `invoke` = the
-  model selected it. `read` = a file was opened, which carries no intent. Only
-  `slash + invoke` is *deliberate use*. Summing all three makes a never-chosen skill
-  look busy.
-- **Exclude this audit's own reads.** Phase 2 opens every `SKILL.md`, so a run that
-  counts `read` events marks the whole library as used *by having audited it*. Drop
-  events from the current day (or from this run's window) before counting.
-- **`slash` events exist only from 2026-07-03.** For windows straddling that date,
-  treat counts for **user-invocable** skills as lower bounds.
-- **Drop `sandbox: true` rows.** They are the trace of skill-comply's compliance test
-  making a sandboxed child session call the skill — a synthetic scenario, not use.
-  Counting them makes exactly the skills under compliance test look busy. The tag exists
-  only from 2026-08-17 (`log-skill-usage.sh` schema comment); older rows carry no tag, so
-  for windows reaching before that date also drop rows whose `project` is under
-  `/tmp/skill-comply-sandbox` or `/private/tmp/skill-comply-sandbox` (e.g.
-  `select(.sandbox != true and ((.project // "") | test("^(/private)?/tmp/skill-comply-sandbox(/|$)") | not))`).
+JSON out, exit 0 always: `counts` (per skill — `deliberate` / `slash` / `invoke` /
+`last_used`, ordered by deliberate use), `window_label`, `measurable`, and `excluded`
+(how many rows each correction removed). The four corrections that decide whether the
+number means anything — the event-type split, the two sandbox exclusions, and the
+real-span label — live in the script's docstring together with their measured effect on
+the real log. **Do not re-implement them as a jq one-liner here** (ADR-0052): the
+`verify-bootstrap` case is why — 2 apparent uses, 0 after correction.
 
-If the log is **missing**, render usage as `—` (unmeasured). **Never render it as 0** —
-unmeasured and unused are different facts. If the log is younger than the widest window,
-say so and label that column with the log's real span rather than the nominal one.
+Two readings the script hands you but cannot make for you:
+
+- `measurable: false` → render usage as `—` (unmeasured). **Never render it as 0** —
+  unmeasured and unused are different facts.
+- `span_shorter_than_window: true` → label the column with `window_label` (the log's real
+  span), not the nominal `14d`.
+
+**Reference-URL evidence** (parent-owned for the same reason, plus one of its own: Phase 2
+runs batch agents *in parallel*, and `fetch named URLs` inside each of them is a burst
+against the same hosts — the shape `rules/common/debugging.md` forbids). Check every URL
+the library names once, serially, here:
+
+```bash
+set -o pipefail   # without it a producer crash reads as "0 dead links, all healthy"
+uv run --project ~/.claude/skills/skill-health python -m scripts.scan_refs --external-urls |
+  uv run --project ~/.claude/skills/skill-health python -m scripts.url_liveness --urls-from -
+```
+
+Extraction is `scan_refs`'s job, not a `grep`: it skips fenced code blocks and template
+slots, so the audit does not fetch its own example URLs. (`--offline` on `url_liveness`
+is the dry run — it reports every URL `skip` without touching the network.)
+
+Verdicts are `live` / `dead` / `blocked` / `skip`. **`blocked` is not `dead`** — a 403 is
+bot policy, not absence; reporting it as dead sends the next reader chasing a link that
+is fine. `skip`, `offline_suspected: true`, `halted: true`, and a non-null `source_error` all
+mean *unchecked*, not *fine* — and `input_lines: 0` means nothing was ever checked, which
+is not the same as a clean corpus. If the run halted on a rate limit, say so in the report and do **not** re-run the
+remainder in this session.
 
 State the scan result up front: which paths were scanned, how many skills found, and
 whether usage is measurable.
 
 ## Phase 2 — Per-item scrutiny (parallel small batches, fresh contexts)
 
-Split the target set into batches of **10–12 files**, interleaving `learned/` notes
-across batches, and launch **one subagent per batch in parallel**. Small batches are
-the point: per-item attention dilutes as a context fills, and the 84/84-Keep failure
-mode is exactly that dilution. Do NOT pass prior verdicts or the ledger to batch agents
-(anchoring); do NOT pass usage data (parent-owned dimension).
+Split the target set into batches of **10–12 files** and launch **one subagent per batch in parallel**. Small batches are
+the point: per-item attention dilutes as a context fills. Do NOT pass prior verdicts or
+the ledger to batch agents (anchoring); do NOT pass usage data (parent-owned dimension).
 
 Each batch agent applies, per skill:
 
@@ -136,10 +139,25 @@ creation-time draft gate by reference, not by copy):
   Phase 3's job, not this agent's — the same goes for contradictions with skills outside
   this batch)
 - [ ] Currency: **unconditionally verify** every artifact the skill names — `ls` each
-  referenced path (`~/.claude/agents/<name>.md`, hooks, bundled scripts), run
-  `--help` / version checks for named CLI flags, fetch named URLs. "Verify if it looks
-  stale" is banned phrasing: the condition is what dilutes. Deterministically checkable
-  claims get deterministic checks, every time.
+  referenced path (`~/.claude/agents/<name>.md`, hooks, bundled scripts) and run
+  `--help` / version checks for named CLI flags. "Verify if it looks stale" is banned
+  phrasing: the condition is what dilutes. Deterministically checkable claims get
+  deterministic checks, every time. **Do not fetch URLs** — the parent checked them once
+  in Phase 1 and hands you the verdicts; parallel batch agents each fetching is a burst.
+
+**Stocktake-only existence pass (every item, including Keep-bound skills).** This is
+separate from the canonical four-question quality screen above, which `skill-creator`
+reuses. Answer both questions explicitly:
+
+- [ ] Standalone value: if this file disappeared, would the library lose a user job that
+  is not already covered by an installed skill, rule, runtime substrate, or cheap
+  on-demand generation?
+- [ ] Cost asymmetry: does the skill's independent trigger and reusable judgment justify
+  its selection, drift, and maintenance cost?
+
+A No answer makes the skill a non-Keep candidate and must be pressure-tested. Do not
+shield a skill from this pass merely because it is current, well written, recently used,
+or part of a documented layer.
 
 **Stage 2 — verdict pressure-test (non-Keep candidates only).** Generate 1–3
 skill-specific atomic yes/no questions that try to **refute the draft verdict** before
@@ -151,7 +169,8 @@ rationale (Retire).
 Evaluation is **holistic judgment, not a numeric rubric** — binary answers are evidence
 feeding the verdict, never aggregated into a score (a satisfaction ratio changes no
 decision and dilutes a single dominant No). Batch agents return structured verdicts
-with self-contained reasons; Keep-bound skills get no dynamic questions.
+with self-contained reasons. Every skill gets the fixed existence pass; only non-Keep
+candidates get the dynamic pressure-test questions.
 
 ## Phase 3 — Overlap and contradiction probe (one dedicated agent, set-level)
 
@@ -162,16 +181,21 @@ finds nothing wrong with any of them individually. One agent, whole library:
 1. Read **name + description (+ heading structure)** of every target file — light pass.
 2. Propose candidate clusters greedily (false positives are fine at this stage).
 3. For each candidate cluster, read the bodies side by side and judge:
-   - `GENUINE_DUPLICATION` — removing one loses nothing; name the Merge target
+   - `ABSORBABLE_OVERLAP` — two skills serve the same user intent, trigger, and job;
+     maintaining both adds selection/drift cost; the source has named unique residue
+     that can move into a named Merge target
+   - `FULLY_ABSORBED` — another asset already covers the whole user job and the source
+     has no unique residue to move; name the covering asset and use Retire, not Merge
    - `CONTRADICTION` — two skills that can both load give **opposite instructions for the
      same situation**, or a sub-skill's content violates the canon it defers to. Quote
      both sides. See the contradiction checks below.
-   - `DOCUMENTED_LAYERING` — orchestrator→sub-skill, rule→skill, declared defer;
-     quote the defer line as evidence
-   - `ADJACENT_BUT_DISTINCT` — near domain, different job
+   - `DOCUMENTED_LAYERING` — orchestrator→sub-skill, rule→skill, declared defer; quote
+     the defer line and name each file's independently triggerable responsibility
+   - `ADJACENT_BUT_DISTINCT` — near domain, different job; name one concrete independent
+     user request that each member handles
 4. One extra pass over `~/.claude/rules/` and MEMORY.md: is a rule re-stating a skill
-   (or vice versa) beyond a declared pointer? Flag promotion residue (a learned note
-   whose content a rule has fully absorbed) as Retire/Merge candidates.
+   (or vice versa) beyond a declared pointer? Flag promotion residue (a skill whose
+   content a rule has fully absorbed) as Retire/Merge candidates.
 
 ### Contradiction checks (a declared boundary is a claim, not evidence)
 
@@ -191,66 +215,37 @@ cluster labelled `DOCUMENTED_LAYERING`, run all three:
   (`origin` = an external repo) carry their author's premises. A conflict of premises
   reads as a normal-looking instruction and survives every per-file check.
 
-`GENUINE_DUPLICATION` produces Merge verdicts. `CONTRADICTION` produces Improve (add the
-missing defer, delete the conflicting rule, narrow the trigger) or, when the premises
-themselves clash and the subordinate never fires on its own, Retire-and-absorb — name
-what must move before deletion.
-
-> Worked case, 2026-08-15: `article-writing` (origin: ECC) defaulted to "operator-style
-> voice" absent supplied examples, while `writing-ecosystem` — which declared itself its
-> canon — mandates 発見調. The defer existed only on the canon side, so a direct fire of
-> `article-writing` would have installed the opposing default alone. The probe had
-> labelled the pair `DOCUMENTED_LAYERING` on the strength of the quoted defer line.
-> Verdict: Retire-and-absorb. This section exists because that pass missed it.
+`ABSORBABLE_OVERLAP` produces Merge verdicts because named residue must move into the
+target. `FULLY_ABSORBED` produces Retire because the target already covers the whole job
+and there is nothing to move. `CONTRADICTION` produces Improve (add the missing defer,
+delete the conflicting rule, narrow the trigger) or, when the premises themselves clash
+and the subordinate never fires on its own, Retire-and-absorb — name what must move
+before deletion.
 
 ## Phase 4 — Synthesis (parent)
 
 Merge Phase 2 verdicts, Phase 3 overlap / contradiction verdicts, and parent-owned usage data:
 
-- **Usage is rendered, never thresholded.** There is no zero-usage rule and no window
-  that auto-nominates a skill. Put the deliberate-use counts and the last-used date in
-  the table and let judgment read them. A threshold compresses the signal to one bit and
-  throws away the part that decides the call — 2026-08-15: 21 of 65 skills had zero
-  deliberate use, a list that would have been useless as candidates (it is mostly
-  seasonal skills like `paper-deposit` and `release-doi`) but was highly informative
-  read as numbers.
-- **Compare observed cadence against the cadence the skill's own description implies.**
-  A skill that should fire weekly and has not fired in a month is not unwanted — its
-  **trigger is broken**, which is an Improve on the description, not a Retire. A skill
-  that fires a few times a year and last fired at the last release is behaving
-  correctly. Same number, opposite verdict; only the expected cadence separates them.
-- **The Retire signal is a conjunction — all three, not any one.** Write it as an AND or
-  it over-produces (measured below):
-  1. **Zero deliberate use** over the log's real span.
-  2. **Observed cadence contradicts the cadence the description implies** — the previous
-     bullet. A seasonal skill sitting at zero between releases satisfies (1) and fails
-     this one.
-  3. **The defect is one of fit, not freshness.** A wrong scope, an unreachable trigger,
-     or a niche another component is actually serving is a fit defect. A stale version
-     pin or a dead pointer is a freshness defect — that is an Update, and it says nothing
-     about whether the skill should exist.
-
-  Worked measurement, 2026-08-15 (n=65). Condition (1) alone: 21 skills. (1) AND "has a
-  confirmed defect", the loose form this bullet used to be written in: **9 skills** —
-  including `paper-writing`, `paper-ecosystem` and `e2e`, all behaving correctly. Adding
-  (2) and (3): **2 skills**.
-  - `agent-architecture-audit` — its description claims "any LLM-powered feature", the
-    widest trigger in the library, and it fired zero times in 66 days. Maximal claimed
-    cadence against zero observed is the cleanest possible failure of (2).
-  - `council` — `grill-me` took 46 deliberate uses in the same pre-build deliberation
-    niche while `council` took zero, *and* `grill-me`'s body explicitly routes to it
-    ("a clean choice between two known options → use `council`"). A declared handoff that
-    never fires in 66 days means the receiving case does not arise on its own.
-
-  Note what (3) excludes. Nine of today's Improve/Update verdicts were freshness defects
-  found by the currency check; none of them bear on existence. Do not let a productive
-  currency pass inflate the Retire list.
-- **Aggregate cost (set-level)**: holding a skill is not free even when it is
-  individually fine. Skill benefits are fragile — a large, uncurated library degrades
-  skill selection and pulls behaviour back toward the no-skill baseline. The Keep bar
-  **rises with library size**: when the set is large, a merely-adequate skill (rare
-  use, low uniqueness, heavy adjacency) is a Retire/Merge candidate on
-  aggregate-dilution grounds alone. A judgment input, never a quota.
+- **Content owns the verdict; usage is reference evidence only.** Render the 14-day
+  deliberate-use count and last-used date, but never make usage a prerequisite, veto,
+  threshold, or automatic candidate trigger. Recent use does not immunize invalid
+  content; zero use does not condemn valid content.
+- **Retire content-first.** A skill can be Retire regardless of usage when (a) its
+  workflow or underlying premise is obsolete, (b) another asset actually absorbs its
+  user job and no standalone residue remains, or (c) it is too thin, non-actionable, or
+  cheaply regenerated for its selection/drift/maintenance cost. State which route the
+  evidence supports and what covers the need instead.
+- **Treat cadence only as a clue.** A zero in 14 days may prompt a trigger/cadence
+  explanation, but it never creates a candidate or verdict. A unique seasonal skill may
+  remain Keep. Conversely, a recently used skill whose content is fully replaced may be
+  Retire.
+- **Separate existence from freshness.** A stale version pin, retired CLI flag, or dead
+  pointer that is locally fixable is Update, not Retire. It becomes Retire only when the
+  verified evidence shows the workflow/premise itself is no longer worth preserving.
+- **Charge aggregate cost through the existence pass.** Holding a skill adds selection,
+  drift, and maintenance cost. Do not protect a merely adequate skill because it has no
+  individual defect; ask whether its independent trigger and reusable judgment still
+  justify a separate file. This is judgment, never a quota.
 - Conflicts (e.g. batch says Keep, probe says Merge) are resolved by the parent reading
   the cited evidence, not by vote.
 
@@ -259,15 +254,15 @@ Merge Phase 2 verdicts, Phase 3 overlap / contradiction verdicts, and parent-own
 | Keep | Useful, current, unique value |
 | Improve | Worth keeping, but specific improvements needed |
 | Update | Referenced technology/artifact is outdated (verified, with evidence) |
-| Retire | Low quality, stale, or cost-asymmetric |
-| Merge into [X] | Genuine duplication confirmed by the probe; name the target |
+| Retire | Obsolete, cost-asymmetric, or `FULLY_ABSORBED` with no residue to move |
+| Merge into [X] | `ABSORBABLE_OVERLAP` with named unique residue; name the target and residue to move |
 | Retire-and-absorb | A `CONTRADICTION` whose premises clash and whose subordinate never fires on its own; name what must move into the canon before deletion |
 
 Evaluation is **origin-blind**: the same checklist applies to every skill.
 
-Render a table: `Skill | 7d | 30d | 90d | last used | Verdict | Reason`, where the counts
-are **deliberate use only** (`slash + invoke`). State the log's real span next to the
-widest column.
+Render a table: `Skill | 14d | last used | Verdict | Reason`, where the count is
+**deliberate use only** (`slash + invoke`). If the log is younger than 14 days, replace
+`14d` with its real span.
 
 ## Phase 5 — Consolidation
 
@@ -358,9 +353,6 @@ no score aggregation) follows the checklist-decomposition evaluation line: BinEv
 BinEval's own limitations show over-decomposition degrades correlation on holistic
 quality dimensions, and a satisfaction ratio would dilute a single dominant No.
 
-The v3.0 hybrid architecture (deterministic pre-pass → fresh-context batches with
-unconditional verification → dedicated overlap probe) is grounded in a 2026-07-13
-controlled comparison on this library (n=73): the v2.0 single-context pass returned
-84/84 Keep while fresh-context batches surfaced 12/73 non-Keep (6 with deterministic
-evidence) and a dedicated probe confirmed 0 genuine duplications — i.e. per-item
-scrutiny dilutes in a loaded context, set-level judgment does not need one.
+The v3.1 hybrid architecture separates deterministic verification, narrow per-item
+scrutiny, and set-level existence/overlap judgment. The split preserves attention for
+each property without carrying prior verdict outcomes into the next audit.
