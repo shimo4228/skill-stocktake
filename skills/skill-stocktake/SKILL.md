@@ -129,7 +129,7 @@ the ledger to batch agents (anchoring); do NOT pass usage data (parent-owned dim
 Each batch agent applies, per skill:
 
 **Stage 1 — binary screen.** Explicit Yes/No per item; surface only the No answers
-(these four questions are the canonical set — `skill-creator` §4 reuses them for its
+(these six questions are the canonical set — `skill-creator` §4 reuses them for its
 creation-time draft gate by reference, not by copy):
 
 - [ ] Actionability: concrete steps/commands/examples you can act on?
@@ -144,9 +144,21 @@ creation-time draft gate by reference, not by copy):
   phrasing: the condition is what dilutes. Deterministically checkable claims get
   deterministic checks, every time. **Do not fetch URLs** — the parent checked them once
   in Phase 1 and hands you the verdicts; parallel batch agents each fetching is a burst.
+- [ ] Hygiene: is the body free of bloat — trivial prohibition lists, repeated emphasis,
+  and step-by-step recitals that could fold into a principle (skill-creator §3 の書き方)?
+  Do NOT fold greppable detection terms, self-enforcing prohibitions, or numeric
+  thresholds — abstraction destroys their function (ADR-0058 rejected uniform
+  shortening for exactly this). Bodies grow after creation; this question is the
+  standing check the creation-time gate cannot repeat.
+- [ ] Description audit: is the description free of standing instruction text — NOT-for
+  routing, "Use PROACTIVELY"-style fire directives, mentions of other skills — beyond
+  stating what the skill is for and when to reach for it? A listed description resides
+  in the system prompt every session as an unaudited instruction layer (RFC-0018).
+  Quote each instruction sentence found (semantic judgment, not regex); do NOT judge
+  its effectiveness — the parent joins quotes with invoke stats at synthesis.
 
 **Stocktake-only existence pass (every item, including Keep-bound skills).** This is
-separate from the canonical four-question quality screen above, which `skill-creator`
+separate from the canonical six-question quality screen above, which `skill-creator`
 reuses. Answer both questions explicitly:
 
 - [ ] Standalone value: if this file disappeared, would the library lose a user job that
@@ -246,6 +258,10 @@ Merge Phase 2 verdicts, Phase 3 overlap / contradiction verdicts, and parent-own
   drift, and maintenance cost. Do not protect a merely adequate skill because it has no
   individual defect; ask whether its independent trigger and reusable judgment still
   justify a separate file. This is judgment, never a quota.
+- **Description-audit quotes join usage here.** An instruction sentence whose aim
+  (self-firing, misfire routing) the deliberate-use record does not support is a
+  removal candidate: fold it into the body or an existing rule. A supported trigger
+  surface is left alone (do not strip descriptions that demonstrably fire).
 - Conflicts (e.g. batch says Keep, probe says Merge) are resolved by the parent reading
   the cited evidence, not by vote.
 

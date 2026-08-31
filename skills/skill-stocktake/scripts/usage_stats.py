@@ -66,7 +66,7 @@ def _utc(moment: datetime) -> str:
     return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _parse_ts(value: Any) -> datetime | None:
+def _parse_ts(value: object) -> datetime | None:
     if not isinstance(value, str):
         return None
     try:
@@ -80,7 +80,7 @@ def _parse_ts(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
-def is_sandbox_path(project: Any) -> bool:
+def is_sandbox_path(project: object) -> bool:
     """True when *project* is the skill-comply sandbox base or lives under it."""
     if not isinstance(project, str):
         return False
@@ -107,7 +107,11 @@ def aggregate(
         "out_of_window": 0,
         "malformed": malformed,
     }
-    counts: dict[str, dict] = {}
+    # Counters only. `last_used` is a *string rendering* of `last_seen`, so keeping it
+    # in here made the value type `int | str | None` and `entry[event] += 1` a type
+    # error waiting to happen (ty, 2026-08-28). It is joined back in at output time,
+    # where the JSON shape is assembled — the emitted shape is unchanged.
+    counts: dict[str, dict[str, int]] = {}
     # `last_used` is deliberately **not** window-scoped: "last deliberately used" is a
     # fact about the log, and clipping it to the window makes a skill used 30 days ago
     # byte-identical to one that was only ever read. The window bounds the count; the
@@ -134,7 +138,7 @@ def aggregate(
         # 3062 rows over 133 skills).
         entry = counts.get(skill)
         if entry is None:
-            counts[skill] = entry = {"deliberate": 0, "slash": 0, "invoke": 0, "last_used": None}
+            counts[skill] = entry = {"deliberate": 0, "slash": 0, "invoke": 0}
             last_seen[skill] = None
 
         # Precedence matters: a sandboxed `read` is sandbox noise, not a read event.
@@ -154,7 +158,6 @@ def aggregate(
         previous = last_seen[skill]
         if previous is None or ts > previous:
             last_seen[skill] = ts
-            entry["last_used"] = _utc(ts)
 
         if ts < start or ts > end:
             excluded["out_of_window"] += 1
@@ -173,7 +176,10 @@ def aggregate(
     else:
         window_label = f"last {days}d"
 
-    ordered = dict(sorted(counts.items(), key=lambda kv: (-kv[1]["deliberate"], kv[0])))
+    ordered = {
+        skill: {**entry, "last_used": _utc(seen) if (seen := last_seen[skill]) else None}
+        for skill, entry in sorted(counts.items(), key=lambda kv: (-kv[1]["deliberate"], kv[0]))
+    }
     return {
         "window_days": days,
         "window_start": _utc(start),
