@@ -69,9 +69,8 @@ Enumerate skill definition files with Glob (no script needed):
 - `~/.claude/skills/*/SKILL.md`
 - if cwd has `.claude/skills/`, also `{cwd}/.claude/skills/*/SKILL.md` (project skills)
 
-**Canonical ledger keys**: one key per skill directory name, matching the path on disk.
-(`skills/learned/` was retired on 2026-08-23, ADR-0047 — the `learned/<name>` key form no
-longer applies. A rule or skill referencing a name in prose does NOT make it a skill.)
+**Canonical ledger keys**: one key per skill directory name, matching the path on disk
+(ADR-0047). A rule or skill referencing a name in prose does NOT make it a skill.
 
 **Usage evidence** (parent-owned; batch agents never see it). Step 0 — run the script and
 transcribe the numbers; do not re-derive them by hand:
