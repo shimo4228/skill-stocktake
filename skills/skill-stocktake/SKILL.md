@@ -4,7 +4,7 @@ description: Audit installed Claude skills for quality and surface Keep/Improve/
 license: MIT
 metadata:
   author: shimo4228
-  version: "3.1"
+  version: "3.2"
   extracted: "2026-02-21"
 origin: shimo4228
 ---
@@ -17,12 +17,10 @@ does NOT do the improving — once it has a verdict, it **hands off to skill-cre
 improvement engine)**. That boundary is the point: stocktake is the quality gate,
 skill-creator is the fixer.
 
-> Design note (v3.1). Per-item quality/freshness and set-level existence/overlap are
+> Design note. Per-item quality/freshness and set-level existence/overlap are
 > different properties. Deterministic checks are code-owned and unconditional;
 > per-item judgment gets narrow, fresh contexts; set-level judgment gets a light
-> description sweep with targeted deep reads. Historical verdict counts and named past
-> outcomes stay in git history, not in this operational prompt: prior outcomes anchor a
-> new audit toward reproducing them instead of judging the current library.
+> description sweep with targeted deep reads.
 
 ## Modes (`$ARGUMENTS`)
 
@@ -42,25 +40,23 @@ Run BEFORE any LLM judgment. These checks never ride on per-item attention:
 
 1. **skill-health scan** — dangling references / missing artifacts across the library
    (run its scanner per `~/.claude/skills/skill-health/SKILL.md`). Mandatory, not
-   optional: this is the structural layer of Curate (ADR-0019 layering), and the v2.2
-   verification showed exactly these defects slipping through judgment-owned checks.
+   optional: this is the structural layer of Curate — code enumerates the debt,
+   judgment decides — and judgment-owned checks let exactly these defects through.
 2. **Ledger hygiene** — for every `results.json` entry: the path must exist on disk and
    the key must follow the canonical rule below. Dedup violations (same path under two
    keys → keep the canonical key, delete the duplicate). Entries whose path no longer
    exists are removed (note them in the report as retired-from-disk).
 3. **Existence before judgment** — a skill that fails the existence check never reaches
-   Phase 2. Do not let an LLM assign Keep to a file that is not there (this happened:
-   two nonexistent paths carried Keep verdicts in the 2026-07-05 ledger).
+   Phase 2. Do not let an LLM assign Keep to a file that is not there.
 4. **Ownership before judgment** — the same skill-health run reports `external`: skills
    whose directory is a symlink out of the skills root (a package manager's tree, a
    sibling checkout). **These do not get an Improve/Update verdict.** Record them as
    `Out of scope` with the owner and real path in the reason, and route any real defect
    **upstream** (issue / PR). A verdict here is not actionable — an edit lands in
-   someone else's tree, never reaches git, and disappears on their next upgrade.
-   Live miss on 2026-07-25: `hunk-review` drew an Improve for a stale flag table and the
-   fix was written into `/opt/homebrew/Cellar/hunk/0.17.1/…`; it was reverted and filed
-   as [modem-dev/hunk#595](https://github.com/modem-dev/hunk/issues/595). The check is
-   fully structural (`is_symlink()`), so it belongs in code, never in per-item attention.
+   someone else's tree, never reaches git, and disappears on their next upgrade
+   (regression: [modem-dev/hunk#595](https://github.com/modem-dev/hunk/issues/595)).
+   The check is fully structural (`is_symlink()`), so it belongs in code, never in
+   per-item attention.
 
 ## Phase 1 — Inventory
 
@@ -116,14 +112,51 @@ mean *unchecked*, not *fine* — and `input_lines: 0` means nothing was ever che
 is not the same as a clean corpus. If the run halted on a rate limit, say so in the report and do **not** re-run the
 remainder in this session.
 
-State the scan result up front: which paths were scanned, how many skills found, and
-whether usage is measurable.
+**Residency-cost evidence** (parent-owned, once per audit). The substrate's own
+report is the only instrument that measures what a skill's *listing line* costs every
+turn — the number RFC-0017 / RFC-0018 argue about. Run it from the parent, once,
+from the repo cwd when project skills are in scope:
+
+```bash
+claude -p "/skill-doctor"
+```
+
+The child inherits the user's settings, and that inheritance is the measurement: the
+listing it reports is the one real sessions carry. Run it without `--settings`
+isolation. It prints a text table (no JSON; Claude Code ≥ 2.1.269, as-of 2026-09-15 —
+the report is substrate-owned, so when its printed legend and this section disagree,
+the legend wins). Transcribe per skill:
+
+- `context` — tokens the skill's listing line adds to the system prompt every turn.
+  `-` means not in the listing (`disable-model-invocation: true`, or not loaded) and
+  costs nothing. This is the residency cost; nothing else in the harness measures it.
+- `uses` / `last used` — the substrate's count, with its window unlabelled (rows whose
+  `last used` is far outside 7 days still carry counts, so read it as cumulative). It
+  includes the sandbox child sessions `usage_stats` corrects out, so it is a
+  **cross-check** for the deliberate-use column, never its replacement. Where the two
+  disagree beyond what the sandbox correction explains, say so in the report; do not
+  average them.
+- `7d tokens` — tokens attributed to sessions that loaded the skill's body over the
+  last 7 days. Reference only.
+- The "loaded but never invoked" list — a cross-check against Phase 4's
+  description-audit candidates, which come from Phase 2 quotes joined with
+  `usage_stats` deliberate use. A skill on this list but not among the candidates
+  (or the reverse) is a disagreement to report, not a candidate to add.
+
+`Skill usage reports are not available on this connection.` means feature-flag
+fetching is off (`DISABLE_TELEMETRY`, `DO_NOT_TRACK`,
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, or a third-party provider): render
+`context` as `—` (unmeasured) and say so up front.
+
+State the scan result up front: which paths were scanned, how many skills found,
+whether usage is measurable, and whether residency cost was measured.
 
 ## Phase 2 — Per-item scrutiny (parallel small batches, fresh contexts)
 
 Split the target set into batches of **10–12 files** and launch **one subagent per batch in parallel**. Small batches are
 the point: per-item attention dilutes as a context fills. Do NOT pass prior verdicts or
-the ledger to batch agents (anchoring); do NOT pass usage data (parent-owned dimension).
+the ledger to batch agents (anchoring); do NOT pass usage or residency-cost data
+(parent-owned dimensions).
 
 Each batch agent applies, per skill:
 
@@ -154,7 +187,8 @@ creation-time draft gate by reference, not by copy):
   stating what the skill is for and when to reach for it? A listed description resides
   in the system prompt every session as an unaudited instruction layer (RFC-0018).
   Quote each instruction sentence found (semantic judgment, not regex); do NOT judge
-  its effectiveness — the parent joins quotes with invoke stats at synthesis.
+  its effectiveness — the parent joins quotes with usage and residency cost at
+  synthesis.
 
 **Stocktake-only existence pass (every item, including Keep-bound skills).** This is
 separate from the canonical six-question quality screen above, which `skill-creator`
@@ -238,29 +272,36 @@ before deletion.
 Merge Phase 2 verdicts, Phase 3 overlap / contradiction verdicts, and parent-owned usage data:
 
 - **Content owns the verdict; usage is reference evidence only.** Render the 14-day
-  deliberate-use count and last-used date, but never make usage a prerequisite, veto,
-  threshold, or automatic candidate trigger. Recent use does not immunize invalid
-  content; zero use does not condemn valid content.
+  deliberate-use count and last-used date; usage is never a prerequisite, veto,
+  threshold, or automatic candidate trigger.
 - **Retire content-first.** A skill can be Retire regardless of usage when (a) its
   workflow or underlying premise is obsolete, (b) another asset actually absorbs its
   user job and no standalone residue remains, or (c) it is too thin, non-actionable, or
   cheaply regenerated for its selection/drift/maintenance cost. State which route the
   evidence supports and what covers the need instead.
-- **Treat cadence only as a clue.** A zero in 14 days may prompt a trigger/cadence
-  explanation, but it never creates a candidate or verdict. A unique seasonal skill may
-  remain Keep. Conversely, a recently used skill whose content is fully replaced may be
-  Retire.
 - **Separate existence from freshness.** A stale version pin, retired CLI flag, or dead
   pointer that is locally fixable is Update, not Retire. It becomes Retire only when the
   verified evidence shows the workflow/premise itself is no longer worth preserving.
 - **Charge aggregate cost through the existence pass.** Holding a skill adds selection,
-  drift, and maintenance cost. Do not protect a merely adequate skill because it has no
-  individual defect; ask whether its independent trigger and reusable judgment still
-  justify a separate file. This is judgment, never a quota.
-- **Description-audit quotes join usage here.** An instruction sentence whose aim
-  (self-firing, misfire routing) the deliberate-use record does not support is a
-  removal candidate: fold it into the body or an existing rule. A supported trigger
-  surface is left alone (do not strip descriptions that demonstrably fire).
+  drift, and maintenance cost; do not protect a merely adequate skill because it has no
+  individual defect. `disable-model-invocation: true` (`context` = `-`) and a name in
+  another skill's chain row are **not** grounds for a Yes on cost asymmetry: the first
+  prices selection cost alone and leaves drift and maintenance cost unpaid, the second is
+  a pointer, which is a claim and not evidence of use. For a reference-style skill with
+  zero invokes, pressure-test existence with its **organic reads** — read events in
+  `~/.claude/metrics/skill-usage.jsonl` with audit days excluded (this audit's
+  `evaluated_at` and any generation-audit / sub-audit dates), since a stocktake reading its
+  own targets registers as reads. A few organic reads that stop months back is evidence the
+  file is no longer functioning as a reference (ADR-0068).
+- **Description-audit quotes join usage and residency cost here.** An instruction
+  sentence whose aim (self-firing, misfire routing) the deliberate-use record does not
+  support is a removal candidate: fold it into the body or an existing rule. The
+  `context` column prices the candidate — a candidate with nonzero `context` and zero
+  deliberate use is the RFC-0017 fold case (the fold recipe is skill-health Phase 3, Utility), and a
+  skill already at `-` has nothing left to fold. A
+  supported trigger surface is left alone (do not strip descriptions that demonstrably
+  fire). Residency cost is a price, not a verdict input: it orders the fold candidates,
+  it never makes one.
 - Conflicts (e.g. batch says Keep, probe says Merge) are resolved by the parent reading
   the cited evidence, not by vote.
 
@@ -275,9 +316,10 @@ Merge Phase 2 verdicts, Phase 3 overlap / contradiction verdicts, and parent-own
 
 Evaluation is **origin-blind**: the same checklist applies to every skill.
 
-Render a table: `Skill | 14d | last used | Verdict | Reason`, where the count is
-**deliberate use only** (`slash + invoke`). If the log is younger than 14 days, replace
-`14d` with its real span.
+Render a table: `Skill | ctx | 14d | last used | Verdict | Reason`, where `ctx` is the
+`/skill-doctor` `context` figure (`—` when unmeasured) and the count is **deliberate
+use only** (`slash + invoke`). If the log is younger than 14 days, replace `14d` with
+its real span.
 
 ## Phase 5 — Consolidation
 
@@ -295,7 +337,6 @@ unactioned.
 - **Update the ledger**: Read `results.json` → merge this run's verdicts → Write it back
   (`evaluated_at` = real UTC from `date -u +%Y-%m-%dT%H:%M:%SZ`). In `changed` mode,
   preserve the prior verdicts of skills you did not re-evaluate.
-- If MEMORY.md exceeds 100 lines, propose compression.
 
 ## Reason quality (required)
 
@@ -338,8 +379,8 @@ every write.
 ## Related
 
 - `skill-creator` — the improvement engine; hand off Improve/Update work to it.
-- `skill-health` — the deterministic structural layer; Phase 0 runs its scanner as a
-  mandatory pre-pass (enumerate-then-decide: code enumerates debt, judgment decides).
+- `skill-health` — the deterministic structural layer (dangling references, ownership,
+  the description-fold recipe).
 - `config-gc` — GC over skill *existence* and the whole of ~/.claude; stocktake judges
   skill *quality*.
 - `rules-stocktake` — the same audit for `~/.claude/rules/` (residency cost instead of
@@ -356,8 +397,6 @@ every write.
 - `llm-as-judge` — the generic judge design canon (binary screen → pressure-test →
   holistic named verdict, no aggregation); Phase 2 is its library-scale implementation.
 - `harness-sync` — use it to sync this skill to its public repo.
-- Usage measurement: `~/.claude/hooks/log-skill-usage.sh` →
-  `~/.claude/metrics/skill-usage.jsonl` (a measurement layer independent of stocktake).
 
 ## References
 
@@ -368,6 +407,6 @@ no score aggregation) follows the checklist-decomposition evaluation line: BinEv
 BinEval's own limitations show over-decomposition degrades correlation on holistic
 quality dimensions, and a satisfaction ratio would dilute a single dominant No.
 
-The v3.1 hybrid architecture separates deterministic verification, narrow per-item
+The hybrid architecture separates deterministic verification, narrow per-item
 scrutiny, and set-level existence/overlap judgment. The split preserves attention for
 each property without carrying prior verdict outcomes into the next audit.
