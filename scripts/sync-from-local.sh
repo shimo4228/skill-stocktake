@@ -73,7 +73,7 @@ done
 
 # --- prune runtime artifacts from the staged payload ---
 find "$STAGING" \( -name results.json -o -name '*.log' -o -name '*.pyc' \
-  -o -name .DS_Store -o -name .coverage -o -name '.coverage.*' \) -delete
+  -o -name .DS_Store -o -name .coverage -o -name '.coverage.*' -o -name MAINTENANCE.md \) -delete
 find "$STAGING" \( -name __pycache__ -o -name .pytest_cache -o -name .venv \
   -o -name node_modules -o -name .mypy_cache -o -name .ruff_cache \
   -o -name htmlcov \) -type d -prune -exec rm -rf {} + 2>/dev/null || true

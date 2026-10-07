@@ -1,6 +1,6 @@
 ---
 name: skill-stocktake
-description: Audit installed Claude skills for quality and surface Keep/Improve/Update/Retire/Merge verdicts. Use when the user says "audit my skills", "stocktake", "review my skills", "which skills should I retire or merge", "do a quality pass over my skills", or "/skill-stocktake". NOT for creating or improving a single skill (that is skill-creator) and NOT for whole-config GC across hooks/permissions/MCP (that is config-gc).
+description: Audit installed Claude skills for quality and surface Keep/Improve/Update/Retire/Merge verdicts. Use when the user says "audit my skills", "stocktake", "review my skills", "which skills should I retire or merge", "do a quality pass over my skills", or "/skill-stocktake". NOT for creating or improving a single skill (that is skill-creator).
 license: MIT
 metadata:
   author: shimo4228
@@ -176,12 +176,17 @@ creation-time draft gate by reference, not by copy):
   phrasing: the condition is what dilutes. Deterministically checkable claims get
   deterministic checks, every time. **Do not fetch URLs** — the parent checked them once
   in Phase 1 and hands you the verdicts; parallel batch agents each fetching is a burst.
+  Read the skill's `MAINTENANCE.md` when it exists: it holds the reasons and history the
+  body leaves out, and a claim there can be as stale as one in the body.
 - [ ] Hygiene: is the body free of bloat — trivial prohibition lists, repeated emphasis,
   and step-by-step recitals that could fold into a principle (the skill-creator §3 writing guidance)?
   Do NOT fold greppable detection terms, self-enforcing prohibitions, or numeric
   thresholds — abstraction destroys their function (ADR-0058 rejected uniform
   shortening for exactly this). Bodies grow after creation; this question is the
-  standing check the creation-time gate cannot repeat.
+  standing check the creation-time gate cannot repeat. Also: does the body run on its own —
+  no value or rule needed to act is left to a file outside the skill directory (an ADR, a
+  rule section)? A parenthetical ADR number that only names *why* is provenance, not
+  delegation; it belongs in the skill's `MAINTENANCE.md`, which stays unpublished.
 - [ ] Description audit: is the description free of standing instruction text — NOT-for
   routing, "Use PROACTIVELY"-style fire directives, mentions of other skills — beyond
   stating what the skill is for and when to reach for it? A listed description resides
@@ -323,7 +328,7 @@ its real span.
 
 ## Phase 5 — Consolidation
 
-**Confirm one by one** (config-gc's confirm-each design): walk the non-Keep candidates
+**Confirm one by one**: walk the non-Keep candidates
 sequentially — for each, show the evidence first, then ask `[y/n/skip]`. Never batch the
 approval. The user can stop at any point; `skip` records the verdict in the ledger
 unactioned.
@@ -381,8 +386,6 @@ every write.
 - `skill-creator` — the improvement engine; hand off Improve/Update work to it.
 - `skill-health` — the deterministic structural layer (dangling references, ownership,
   the description-fold recipe).
-- `config-gc` — GC over skill *existence* and the whole of ~/.claude; stocktake judges
-  skill *quality*.
 - `rules-stocktake` — the same audit for `~/.claude/rules/` (residency cost instead of
   usage).
 - `agent-stocktake` — the third sibling, for `~/.claude/agents/` (hybrid cost model:
