@@ -1,6 +1,6 @@
 ---
 name: skill-stocktake
-description: Audit installed Claude skills for quality and surface Keep/Improve/Update/Retire/Merge verdicts. Use when the user says "audit my skills", "stocktake", "review my skills", "which skills should I retire or merge", "do a quality pass over my skills", or "/skill-stocktake". NOT for creating or improving a single skill (that is skill-creator).
+description: "Audit the installed skills and decide which to keep, improve, merge or retire. Use when taking stock of the skill library (skill の棚卸し). For writing or revising one skill, use skill-creator."
 license: MIT
 metadata:
   author: shimo4228
