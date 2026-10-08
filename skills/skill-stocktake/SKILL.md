@@ -399,7 +399,7 @@ every write.
   assets.
 - `llm-as-judge` — the generic judge design canon (binary screen → pressure-test →
   holistic named verdict, no aggregation); Phase 2 is its library-scale implementation.
-- `harness-sync` — use it to sync this skill to its public repo.
+- Your publish step (the author's harness uses `harness-sync`) — use it to sync this skill to its public repo.
 
 ## References
 
