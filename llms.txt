@@ -16,7 +16,7 @@
 - Hybrid evaluation split by property, not context length: deterministic checks are code-owned and unconditional (Phase 0 structural pre-pass via skill-health); per-item judgment runs in small fresh-context batches of 10–12 (attention dilutes in a loaded context — a single-context pass returned all-Keep where batches surfaced 12/73 non-Keep); set-level overlap detection is a dedicated probe (description sweep → side-by-side body reads)
 - Lean verdict ledger: `~/.claude/skills/skill-stocktake/results.json` (`{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`), updated inline
 - Usage measurement: bundled `hooks/log-skill-usage.sh` logs `invoke` / `read` / `slash` events to `~/.claude/metrics/skill-usage.jsonl`; `slash` (user-typed /skill, added 2026-07-03) closes the blind spot where command-message injection bypasses the Skill tool and Read
-- 6 phases: Structural pre-pass → Inventory → Per-item scrutiny (parallel batches) → Overlap probe → Synthesis → Consolidation; Improve/Update verdicts hand off to Anthropic's official `skill-creator` skill
+- 6 phases: Structural pre-pass → Inventory → Per-item scrutiny (parallel batches) → Overlap probe → Synthesis → Consolidation; Improve/Update verdicts hand off to a skill named `skill-creator`
 
 ## Standard reference
 
@@ -25,7 +25,7 @@
 
 ## Improvement hand-off
 
-- Anthropic's official `skill-creator` skill (from [anthropics/skills](https://github.com/anthropics/skills)) is the improvement engine; skill-stocktake hands off Improve/Update verdicts to it. It is not authored by shimo4228.
+- A skill named `skill-creator` is the improvement engine; skill-stocktake hands off Improve/Update verdicts to it with the failed screening questions. The author's [skill-creator](https://github.com/shimo4228/akc-cycle/tree/main/skills/skill-creator) ships in the akc-cycle plugin, and the SKILL.md cites its §3 (writing guidance) and §4 (the shared screening questions).
 
 ## Sibling skills
 

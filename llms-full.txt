@@ -23,7 +23,7 @@ This document is the self-contained AI reference for `skill-stocktake` (shimo422
 - **Evaluation mechanism**: hybrid — batches of 10–12 skills per fresh-context subagent for per-item scrutiny (with unconditional deterministic verification of every named path/flag/URL), plus one dedicated overlap-probe agent for set-level duplication judgment
 - **Change detection (changed mode)**: `SKILL.md` mtime vs the ledger's `evaluated_at`
 - **Ledger**: `~/.claude/skills/skill-stocktake/results.json` — lean `{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`, updated inline (no merge script)
-- **Improve/Update hand-off**: offered to Anthropic's official `skill-creator` skill (from [anthropics/skills](https://github.com/anthropics/skills), not authored by shimo4228); stocktake itself only audits
+- **Improve/Update hand-off**: offered to a skill named `skill-creator` (the author's version ships in the [akc-cycle plugin](https://github.com/shimo4228/akc-cycle/tree/main/skills/skill-creator)); stocktake itself only audits
 - **Scope paths**: `~/.claude/skills/` (global), `$PWD/.claude/skills/` (project)
 - **Requirements**: Claude Code with Glob/Read/Bash; `jq` and `python3` optional for inline one-liners
 - **Usage signal**: read inline from `~/.claude/metrics/skill-usage.jsonl`, written by the bundled Claude Code hook `hooks/log-skill-usage.sh` (events: `invoke` / `read` / `slash`); rendered as unmeasured (not 0) when the log spans under 90 days
@@ -70,7 +70,7 @@ If the usage-logging hook is installed (bundled in this repo as `hooks/log-skill
 
 ## How does this skill relate to skill-creator?
 
-skill-stocktake is the quality gate; Anthropic's official `skill-creator` skill (from [anthropics/skills](https://github.com/anthropics/skills) — not authored by shimo4228) is the improvement engine. Stocktake audits and assigns verdicts but does not do the fixing — when it assigns Improve or Update, it offers to hand the skill off to skill-creator, which runs the draft → test → benchmark → iterate loop. This separation keeps the audit fast and origin-blind while concentrating editing work in the tool built for it.
+skill-stocktake is the quality gate; a skill named `skill-creator` is the improvement engine. The author's [skill-creator](https://github.com/shimo4228/akc-cycle/tree/main/skills/skill-creator) ships in the akc-cycle plugin: it fixes the intent, draws the boundary against neighbouring skills, and closes with a fresh-context draft review and the author's sign-off. Stocktake audits and assigns verdicts but does not do the fixing — when it assigns Improve or Update, it offers to hand the skill off to skill-creator with the questions the skill failed. This separation keeps the audit fast and origin-blind while concentrating editing work in the tool built for it.
 
 ## When should I NOT use this skill?
 

@@ -69,7 +69,7 @@ cp hooks/log-skill-usage.sh ~/.claude/hooks/
 3. **Phase 2 — per-item 精査（小バッチ並列）**: 10–12 件ずつに分割し、バッチごとに 1 サブエージェントをフレッシュなコンテキストで起動。Stage 1 はスキルごとの Yes/No スクリーン（実用性・スコープ整合・バッチ内重複・鮮度 — 名指しされたパス/フラグ/URL は**無条件に**実在検証。「stale に見えたら確認」は禁止表現：その条件判断こそが希釈されるため）。Stage 2 は非 Keep の暫定判定に対しスキル固有の反証質問を生成して確定前に圧力テストします。binary 回答は総合判定の証拠であり、スコアに集約しません。バッチエージェントには過去の判定（アンカリング防止）も使用回数（親の担当）も渡しません。
 4. **Phase 3 — 重複プローブ（専任エージェント）**: 1 エージェントが全スキルの name + description を走査して候補クラスタを貪欲に列挙し、候補の本文を並置精読して「本物の重複 / 明文化された層分け / 隣接だが別担当」を判定します。Merge 判定を出せるのは確認済みの本物の重複のみ。
 5. **Phase 4 — 統合**: 親がバッチ判定・重複判定・使用回数（zero-usage ルール、集合コスト判断）を統合し、自己完結した理由付きの判定テーブルを描画します。
-6. **Phase 5 — 統合実行**: 非 Keep 候補は **1 件ずつ**確認します — 証拠を提示してから `[y/n/skip]` を聞き、一括承認はしません。Retire/Merge はそのファイルの確認後にのみ実行。Improve/Update はスキルごとに、改善エンジンである Anthropic 純正の [`skill-creator`](https://github.com/anthropics/skills) へのハンドオフとして提示します。判定台帳（`results.json`）はインラインで更新します。
+6. **Phase 5 — 統合実行**: 非 Keep 候補は **1 件ずつ**確認します — 証拠を提示してから `[y/n/skip]` を聞き、一括承認はしません。Retire/Merge はそのファイルの確認後にのみ実行。Improve/Update はスキルごとに、改善エンジンである `skill-creator` という名前のスキルへのハンドオフとして提示します（著者の [`skill-creator`](https://github.com/shimo4228/akc-cycle/tree/main/skills/skill-creator) は akc-cycle plugin に入っています）。判定台帳（`results.json`）はインラインで更新します。
 
 ## 判定基準
 
