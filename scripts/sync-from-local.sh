@@ -11,7 +11,9 @@
 # `git diff` in this repo is the review gate.
 #
 # This script is vendored byte-identical across skill repos that publish
-# a harness-canonical skill. Do not add repo-specific logic here.
+# a harness-canonical skill. Do not add repo-specific logic here. The canonical
+# copy is ~/.claude/skills/harness-sync/templates/skill-repo-sync-from-local.sh;
+# edit it there and copy it to every skill repo.
 #
 # Usage:
 #   scripts/sync-from-local.sh --dry-run   # report differences only
@@ -76,7 +78,10 @@ find "$STAGING" \( -name results.json -o -name '*.log' -o -name '*.pyc' \
   -o -name .DS_Store -o -name .coverage -o -name '.coverage.*' -o -name MAINTENANCE.md \) -delete
 find "$STAGING" \( -name __pycache__ -o -name .pytest_cache -o -name .venv \
   -o -name node_modules -o -name .mypy_cache -o -name .ruff_cache \
-  -o -name htmlcov \) -type d -prune -exec rm -rf {} + 2>/dev/null || true
+  -o -name htmlcov -o -name results \) -type d -prune -exec rm -rf {} + 2>/dev/null || true
+# `results` is a run-output directory (skill-comply's generated specs + reports are
+# tracked in the harness, so a gitignore-based prune would not catch them) —
+# measurement records of the author's own skills, which a consumer never uses.
 
 # --- frontmatter YAML validation (GitHub / SkillsMP parse strictly; abort on invalid) ---
 if command -v python3 >/dev/null 2>&1 && python3 -c 'import yaml' >/dev/null 2>&1; then
@@ -111,6 +116,33 @@ if hits="$(grep -rEl "$SECRET_RE" "$STAGING" 2>/dev/null)"; then
   echo "$hits" >&2
   exit 1
 fi
+
+# --- root files must not link into skills/ paths the synced payload does not have ---
+# The sync replaces skills/<name>/ but never touches README / llms*.txt / CHANGELOG,
+# so a renamed or removed file inside a skill leaves those links dangling. Checked
+# before anything is applied, so dry-run reports it and apply aborts with the tree intact.
+python3 - "$TARGET_DIR" "$STAGING" <<'PYEOF' || exit 1
+import pathlib, re, sys, urllib.parse
+target, staging = map(pathlib.Path, sys.argv[1:3])
+link = re.compile(r"\]\(<?([^)\s>]+)|(?:href|src)=\"([^\"]+)\"")
+fence = re.compile(r"^(```|~~~).*?^\1", re.M | re.S)
+code = re.compile(r"`[^`\n]*`")
+docs = [*sorted(target.glob("README*.md")), *(target / n for n in ("llms.txt", "llms-full.txt", "CHANGELOG.md"))]
+bad = []
+for f in docs:
+    if not f.is_file():
+        continue
+    text = code.sub("", fence.sub("", f.read_text(encoding="utf-8")))
+    for m in link.finditer(text):
+        raw = (m.group(1) or m.group(2)).split("#", 1)[0]
+        path = urllib.parse.unquote(raw).removeprefix("./")
+        if path.startswith("skills/") and not (staging / path).exists():
+            bad.append(f"  {f.name}: {path}")
+if bad:
+    print("ABORT: root files link to skills/ paths the synced payload does not have:", file=sys.stderr)
+    print("\n".join(sorted(set(bad))), file=sys.stderr)
+    sys.exit(1)
+PYEOF
 
 # --- report / apply ---
 if (( DRY_RUN )); then

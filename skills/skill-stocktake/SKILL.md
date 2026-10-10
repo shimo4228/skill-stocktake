@@ -30,8 +30,10 @@ skill-creator is the fixer.
 | `changed` | Re-evaluate only skills whose `SKILL.md` mtime is newer than `results.json`'s `evaluated_at`; carry the rest forward from the ledger. Phase 0 and Phase 3 still run over the full set (structural debt, overlap, and contradiction are set properties) |
 
 `changed` detects changes inline (no script):
+> Paths below start at `${CLAUDE_SKILL_DIR}`, the directory holding this SKILL.md; an agent that does not substitute the variable reads it as that directory.
+
 ```bash
-find ~/.claude/skills -name SKILL.md -newermt "$(jq -r .evaluated_at ~/.claude/skills/skill-stocktake/results.json)"
+find ~/.claude/skills -name SKILL.md -newermt "$(jq -r .evaluated_at "${CLAUDE_SKILL_DIR}/results.json")"
 ```
 
 ## Phase 0 — Structural pre-pass (deterministic, code-owned)
@@ -39,7 +41,7 @@ find ~/.claude/skills -name SKILL.md -newermt "$(jq -r .evaluated_at ~/.claude/s
 Run BEFORE any LLM judgment. These checks never ride on per-item attention:
 
 1. **skill-health scan** — dangling references / missing artifacts across the library
-   (run its scanner per `~/.claude/skills/skill-health/SKILL.md`). Mandatory, not
+   (run its scanner per the `skill-health` skill's SKILL.md). Mandatory, not
    optional: this is the structural layer of Curate — code enumerates the debt,
    judgment decides — and judgment-owned checks let exactly these defects through.
 2. **Ledger hygiene** — for every `results.json` entry: the path must exist on disk and
@@ -72,7 +74,7 @@ Enumerate skill definition files with Glob (no script needed):
 transcribe the numbers; do not re-derive them by hand:
 
 ```bash
-uv run --frozen --project ~/.claude/skills/skill-stocktake python -m scripts.usage_stats --days 14
+uv run --frozen --project "${CLAUDE_SKILL_DIR}" python -m scripts.usage_stats --days 14
 ```
 
 JSON out, exit 0 always: `counts` (per skill — `deliberate` / `slash` / `invoke` /
@@ -93,12 +95,13 @@ Two readings the script hands you but cannot make for you:
 **Reference-URL evidence** (parent-owned for the same reason, plus one of its own: Phase 2
 runs batch agents *in parallel*, and `fetch named URLs` inside each of them is a burst
 against the same hosts — the shape `rules/common/debugging.md` forbids). Check every URL
-the library names once, serially, here:
+the library names once, serially, here (the scripts live in the sibling `skill-health` skill, when it is
+installed next to this one):
 
 ```bash
 set -o pipefail   # without it a producer crash reads as "0 dead links, all healthy"
-uv run --frozen --project ~/.claude/skills/skill-health python -m scripts.scan_refs --external-urls |
-  uv run --frozen --project ~/.claude/skills/skill-health python -m scripts.url_liveness --urls-from -
+uv run --frozen --project "${CLAUDE_SKILL_DIR}/../skill-health" python -m scripts.scan_refs --external-urls |
+  uv run --frozen --project "${CLAUDE_SKILL_DIR}/../skill-health" python -m scripts.url_liveness --urls-from -
 ```
 
 Extraction is `scan_refs`'s job, not a `grep`: it skips fenced code blocks and template

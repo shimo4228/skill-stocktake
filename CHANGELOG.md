@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Removed
+
+- `.claude-plugin/marketplace.json`. It was not in Claude Code's marketplace format (no `owner`, no `plugins`), so `/plugin marketplace add` on this repo failed. Install the skill as a plugin through [akc-cycle](https://github.com/shimo4228/akc-cycle), which bundles it.
+
 ### Changed
 
 - **Improve/Update hand-off target in README / llms.txt / llms-full.txt.** These said the hand-off goes to Anthropic's official skill-creator; the SKILL.md hands off to a skill named `skill-creator` and cites the author's skill-creator (§3, §4), which ships in the [akc-cycle plugin](https://github.com/shimo4228/akc-cycle). The docs now say so.
