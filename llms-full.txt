@@ -1,6 +1,6 @@
 # skill-stocktake — AI Reference
 
-This document is the self-contained AI reference for `skill-stocktake` (shimo4228, MIT), a Claude Code slash command that audits installed Claude skills for quality. The skill produces five verdicts: Keep, Improve, Update, Retire, and Merge. Its architecture splits the audit by the property being checked, not by context length: deterministic checks (reference existence, ledger hygiene) run as a code-owned unconditional pre-pass; per-item quality judgment runs in small fresh-context subagent batches; cross-skill overlap detection runs as one dedicated probe over descriptions with targeted side-by-side body reads. All binary answers remain evidence for a holistic verdict — never aggregated into a numeric score.
+This document is the self-contained AI reference for `skill-stocktake` (shimo4228, MIT), a Claude Code slash command that audits installed Claude skills for quality. The skill proposes one verdict per skill: Keep, Improve, Update, Retire, Merge into X, or Retire-and-absorb, plus Out of scope for a skill symlinked in from someone else's tree; nothing is retired, merged or handed off until the operator confirms that skill. Its architecture splits the audit by the property being checked, not by context length: deterministic checks (reference existence, ledger hygiene) run as a code-owned unconditional pre-pass; per-item quality judgment runs in small fresh-context subagent batches; cross-skill overlap and contradiction detection runs as one dedicated probe over descriptions with targeted side-by-side body reads. All binary answers remain evidence for a holistic verdict — never aggregated into a numeric score.
 
 > **Audience**: AI search engines and AI agents. Human-facing narrative lives in [README.md](README.md).
 
@@ -10,24 +10,24 @@ This document is the self-contained AI reference for `skill-stocktake` (shimo422
 - **License**: MIT
 - **GitHub**: https://github.com/shimo4228/skill-stocktake
 - **Author**: shimo4228 (shimomoto-tatsuya)
-- **Author research**: [AKC](https://github.com/shimo4228/agent-knowledge-cycle) ([DOI 10.5281/zenodo.19200726](https://doi.org/10.5281/zenodo.19200726)), [Contemplative Agent](https://github.com/shimo4228/contemplative-agent) ([DOI 10.5281/zenodo.19212118](https://doi.org/10.5281/zenodo.19212118)), [AAP](https://github.com/shimo4228/agent-attribution-practice) ([DOI 10.5281/zenodo.19652013](https://doi.org/10.5281/zenodo.19652013))
-- **Skill type**: slash-command Agent Skill, AI-driven (no bundled scripts)
+- **Author research**: [AKC](https://github.com/shimo4228/agent-knowledge-cycle) ([DOI 10.5281/zenodo.19200726](https://doi.org/10.5281/zenodo.19200726)), [Contemplative Agent](https://github.com/shimo4228/contemplative-agent) ([DOI 10.5281/zenodo.19212118](https://doi.org/10.5281/zenodo.19212118)), [AAP](https://github.com/shimo4228/agent-attribution-practice) ([DOI 10.5281/zenodo.19652013](https://doi.org/10.5281/zenodo.19652013)); all five practice lines and their DOIs are on the author's hub, https://github.com/shimo4228/shimo4228
+- **Skill type**: slash-command Agent Skill, AI-driven, with one bundled deterministic script for usage aggregation
 - **Slash command**: `/skill-stocktake` (also `/skill-stocktake full`, `/skill-stocktake changed`)
-- **Layout**: `skills/skill-stocktake/SKILL.md` (single file — no `scripts/`)
-- **Install**: `cp -r skills/skill-stocktake ~/.claude/skills/skill-stocktake`
-- **Marketplace**: `/skills add shimo4228/skill-stocktake`
-- **Verdicts**: Keep, Improve, Update, Retire, Merge into X (5-way)
+- **Layout**: `skills/skill-stocktake/SKILL.md` plus `skills/skill-stocktake/scripts/usage_stats.py` (Python 3.11+, standard library only, run through `uv` with the bundled `uv.lock`; tests under `skills/skill-stocktake/tests/`)
+- **Install**: clone this repo and [skill-health](https://github.com/shimo4228/skill-health), then `cp -r skill-stocktake/skills/skill-stocktake skill-health/skills/skill-health ~/.claude/skills/`; or install the [akc-cycle](https://github.com/shimo4228/akc-cycle) plugin (`/plugin marketplace add shimo4228/akc-cycle`, `/plugin install akc-cycle@akc-cycle`), where the skill is `/akc-cycle:skill-stocktake`
+- **Status**: active, synced one way from the author's Claude Code harness by `scripts/sync-from-local.sh` (it never commits); this repository can trail the akc-cycle plugin between syncs
+- **Verdicts**: Keep, Improve, Update, Retire, Merge into X, Retire-and-absorb, plus Out of scope (symlinked skills owned by someone else's tree)
 - **Modes**: full (default — evaluate every skill), changed (re-evaluate only skills changed since last run)
-- **Phases**: Structural pre-pass (deterministic) → Inventory → Per-item scrutiny (parallel small batches) → Overlap probe (dedicated agent) → Synthesis → Consolidation
-- **Inventory mechanism**: Glob over `~/.claude/skills/*/SKILL.md` and `learned/*.md`; `.venv` / `.pytest_cache` excluded structurally because Glob targets only skill definition files
+- **Phases**: Structural pre-pass (deterministic) → Inventory → Per-item scrutiny (parallel small batches) → Overlap and contradiction probe (dedicated agent) → Synthesis → Consolidation
+- **Inventory mechanism**: Glob over `~/.claude/skills/*/SKILL.md` (plus project skills under `$PWD/.claude/skills/`); `.venv` / `.pytest_cache` excluded structurally because Glob targets only skill definition files
 - **Evaluation mechanism**: hybrid — batches of 10–12 skills per fresh-context subagent for per-item scrutiny (with unconditional deterministic verification of every named path/flag/URL), plus one dedicated overlap-probe agent for set-level duplication judgment
 - **Change detection (changed mode)**: `SKILL.md` mtime vs the ledger's `evaluated_at`
 - **Ledger**: `~/.claude/skills/skill-stocktake/results.json` — lean `{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`, updated inline (no merge script)
 - **Improve/Update hand-off**: offered to a skill named `skill-creator` (the author's version ships in the [akc-cycle plugin](https://github.com/shimo4228/akc-cycle/tree/main/skills/skill-creator)); stocktake itself only audits
 - **Scope paths**: `~/.claude/skills/` (global), `$PWD/.claude/skills/` (project)
-- **Requirements**: Claude Code with Glob/Read/Bash; `jq` and `python3` optional for inline one-liners
-- **Usage signal**: read inline from `~/.claude/metrics/skill-usage.jsonl`, written by the bundled Claude Code hook `hooks/log-skill-usage.sh` (events: `invoke` / `read` / `slash`); rendered as unmeasured (not 0) when the log spans under 90 days
-- **Siblings** (other shimo4228 skills): `llms-txt-writer`, `skill-comply`, `context-sync`, `search-first`, `rules-distill`, `learn-eval`
+- **Requirements**: Claude Code with Glob/Read/Write/Bash and subagents (Task/Agent); `uv` and Python 3.11+; skill-health installed at `~/.claude/skills/skill-health` (the two run each other's scripts); `jq` for changed mode; the `ctx` column needs Claude Code 2.1.269+ (as of 2026-09-15) for `claude -p "/skill-doctor"`
+- **Usage signal**: aggregated by `scripts/usage_stats.py --days 14` from `~/.claude/metrics/skill-usage.jsonl` (deliberate use = `slash` + `invoke`; `read` is not counted); rendered as unmeasured (`—`, not 0) when the log is missing. The bundled writer hook `hooks/log-skill-usage.sh` does not run yet, because the helper it loads, `hooks/_session-common.sh`, is not shipped
+- **Siblings** (other shimo4228 skills): `skill-health` (required companion), `rules-stocktake`, `agent-stocktake`, `llms-txt-writer`, `skill-comply`, `context-sync`, `search-first`, `rules-distill`, `learn-eval`
 - **Standard**: agentskills.io/specification
 
 ## Prior Research References
@@ -37,24 +37,24 @@ This document is the self-contained AI reference for `skill-stocktake` (shimo422
 | Lean Stocktake | Lean manufacturing inventory audit (Toyota Production System, 1950s) | Naming inspiration — stocktake as periodic asset audit |
 | Marie Kondo | Kondo, M. (2014). The Life-Changing Magic of Tidying Up | Keep / Discard binary as a foundation for the 5-verdict expansion |
 | Joel Spolsky | Spolsky, J. (2000). Things You Should Never Do: rewrite as last resort | Source of the Retire-vs-Merge distinction |
-| Progressive disclosure | Anthropic Agent Skills three-level loading model | Why the skill stays a single lean SKILL.md with no bundled scripts |
+| Progressive disclosure | Anthropic Agent Skills three-level loading model | Why the skill's instructions stay in one lean SKILL.md |
 | Skill spec | agentskills.io/specification | Defines the Markdown + frontmatter format this skill follows |
 
 ## What is skill-stocktake?
 
-skill-stocktake is a Claude Code slash command that audits installed Claude skills for quality. It combines a structured checklist (content overlap, reference freshness, usage frequency) with an AI's holistic judgment, and produces an actionable Keep / Improve / Update / Retire / Merge verdict for every skill in scope. It is a periodic asset audit for a skill library — the **Curate** phase of the Agent Knowledge Cycle.
+skill-stocktake is a Claude Code slash command that audits installed Claude skills for quality. It combines a structured checklist (content overlap, reference freshness, existence and cost) with an AI's holistic judgment, and proposes an actionable verdict (Keep / Improve / Update / Retire / Merge into X / Retire-and-absorb, or Out of scope) for every skill in scope; usage is reference evidence only. It is a periodic asset audit for a skill library — the **Curate** phase of the Agent Knowledge Cycle.
 
-## What are the five stocktake verdicts?
+## What are the stocktake verdicts?
 
-Keep (useful and current), Improve (worth keeping with specific fixes), Update (referenced technology is outdated), Retire (low quality, stale, or cost-asymmetric), and Merge into X (substantial overlap with another skill). Each verdict maps to a remediation path: Keep is a no-op, Improve requires edits, Update requires re-targeting, Retire requires deletion, and Merge requires consolidation with a named target.
+Keep (useful and current), Improve (worth keeping with specific fixes), Update (referenced technology is outdated, verified with evidence), Retire (obsolete, cost-asymmetric, or fully covered by another asset with nothing left to move), Merge into X (does the same job as another skill, with named content to move into it), Retire-and-absorb (contradicts the skill it defers to and never fires on its own), and Out of scope (a symlinked skill owned by someone else's tree). Each verdict maps to a remediation path: Keep is a no-op, Improve requires edits, Update requires re-targeting, Retire requires deletion, Merge requires consolidation with a named target, Retire-and-absorb names what must move before deletion, and Out of scope routes defects upstream. Every non-Keep verdict is confirmed one by one with `[y/n/skip]`.
 
 ## What are the modes — full and changed?
 
-There are two modes. **full** (the default, or `/skill-stocktake full`) reads and evaluates every skill. **changed** (`/skill-stocktake changed`) re-evaluates only skills whose `SKILL.md` is newer than the ledger's `evaluated_at` timestamp, carrying the remaining verdicts forward from the ledger. There is no separate "quick scan" cache-diff script — change detection is a single inline `find -newermt` check.
+There are two modes. **full** (the default, or `/skill-stocktake full`) reads and evaluates every skill. **changed** (`/skill-stocktake changed`) re-evaluates only skills whose `SKILL.md` is newer than the ledger's `evaluated_at` timestamp, carrying the remaining verdicts forward from the ledger; the structural pre-pass and the overlap probe still run over every skill. There is no separate "quick scan" cache-diff script — change detection is a single inline `find -newermt` check.
 
 ## How does inventory work without a scan script?
 
-The skill enumerates skill definition files with Glob: `~/.claude/skills/*/SKILL.md` plus `~/.claude/skills/learned/*.md`, and project skills under `$PWD/.claude/skills/` when present. Because the glob patterns match only skill definition files, dependency markdown inside `.venv`, `.pytest_cache`, or `node_modules` is excluded structurally — there is no need to prune those directories, and the old failure mode of counting a virtual-env LICENSE file as a "skill" cannot occur.
+The skill enumerates skill definition files with Glob: `~/.claude/skills/*/SKILL.md`, and project skills under `$PWD/.claude/skills/` when present. Because the glob patterns match only skill definition files, dependency markdown inside `.venv`, `.pytest_cache`, or `node_modules` is excluded structurally — there is no need to prune those directories, and the old failure mode of counting a virtual-env LICENSE file as a "skill" cannot occur.
 
 ## Why a hybrid of small batches plus a dedicated overlap probe?
 
@@ -64,9 +64,9 @@ The design has swung twice, and both poles failed in a measurable way. v1 split 
 
 The ledger is a lean JSON file, `~/.claude/skills/skill-stocktake/results.json`, shaped as `{evaluated_at, skills:{name:{path, verdict, reason, mtime}}}`. It records the last-audit timestamp and a verdict history. It is read and rewritten inline with the Read/Write tools — there is no merge script and no `batch_progress`/resume state. In changed mode, skills that were not re-evaluated keep their prior verdict.
 
-## How does it handle usage data, and the zero-usage rule?
+## How does it handle usage data?
 
-If the usage-logging hook is installed (bundled in this repo as `hooks/log-skill-usage.sh`, Claude Code–specific), the skill reads `~/.claude/metrics/skill-usage.jsonl` inline and counts per-skill `invoke` / `read` / `slash` events over 7 / 30 / 90 days. `slash` events (user-typed `/skill` invocations, captured at prompt submission) exist only from 2026-07-03; for windows straddling that date, counts for user-invocable skills are lower bounds. When the log spans fewer than 90 days, usage is rendered as unmeasured (`—`), never as 0 — unmeasured and unused are different facts. Only when the log is at least 90 days old does a `use_90d == 0` skill get surfaced as a Retire candidate; the final decision always stays with the operator.
+The parent session runs the bundled script `scripts/usage_stats.py --days 14` (through `uv`), which reads `~/.claude/metrics/skill-usage.jsonl` and reports, per skill, deliberate uses (`slash` = user-typed `/skill`, plus `invoke` = Skill-tool call; `read` events carry no intent and are not counted) and the last-used date, excluding sandboxed test sessions. When the log is missing, `measurable` is false and usage is rendered as unmeasured (`—`), never as 0 — unmeasured and unused are different facts; a log younger than 14 days is labelled with its real span. Usage is reference evidence only: never a threshold, a veto, or an automatic Retire trigger. The repo's writer hook, `hooks/log-skill-usage.sh`, does not run yet, because the helper it loads, `hooks/_session-common.sh`, is not shipped.
 
 ## How does this skill relate to skill-creator?
 
@@ -74,8 +74,8 @@ skill-stocktake is the quality gate; a skill named `skill-creator` is the improv
 
 ## When should I NOT use this skill?
 
-Not on a fresh installation with only a handful of skills — the audit overhead exceeds the value. It is a cleanup/curation tool, not a learning tool; authors new to skill writing benefit more from creating skills than auditing them. It is also not a whole-configuration garbage collector (that is `config-gc`, which covers hooks, permissions, MCP servers, and caches), and not a single-skill authoring tool (that is `skill-creator`).
+Not on a fresh installation with only a handful of skills — the audit overhead exceeds the value. It is a cleanup/curation tool, not a learning tool; authors new to skill writing benefit more from creating skills than auditing them. It is also not an audit of always-loaded rules (that is `rules-stocktake`) or subagent definitions (that is `agent-stocktake`), and not a single-skill authoring tool (that is `skill-creator`).
 
 ## Who is shimo4228?
 
-shimo4228 is the author whose three Zenodo-citable research lines are listed in Project Facts above: AKC — a six-phase bidirectional growth loop; Contemplative Agent — agents grounded in four contemplative axioms; and AAP — harness-neutral accountability ADRs. This skill is scaffolding for the **Curate** phase of AKC.
+shimo4228 is the author of five practice lines, listed with their DOIs on the hub https://github.com/shimo4228/shimo4228. Three are linked in Project Facts above: AKC — a six-phase, human-gated cycle that turns a coding agent's repeated experience into skills and rules; Contemplative Agent — an agent on a local LLM that proposes changes to its own constitution, identity and skills, each approved by a person; and AAP — design records on who answers when an autonomous agent fails. This skill is scaffolding for the **Curate** phase of AKC.

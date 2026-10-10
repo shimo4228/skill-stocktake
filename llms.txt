@@ -1,27 +1,31 @@
 # skill-stocktake
 
-> A Claude Code skill (MIT) that audits all installed Claude skills for quality. It combines a deterministic structural pre-pass, per-skill scrutiny in small fresh-context subagent batches (with unconditional reference verification), and a dedicated cross-skill overlap probe, and applies AI holistic judgment to produce Keep / Improve / Update / Retire / Merge verdicts — never a numeric score. Two modes: full (evaluate everything) and changed (re-evaluate only changed skills, carry the rest forward).
+> A Claude Code skill (MIT) that audits all installed Claude skills for quality. It combines a deterministic structural pre-pass, per-skill scrutiny in small fresh-context subagent batches (with unconditional reference verification), and a dedicated cross-skill overlap probe, and applies AI holistic judgment to propose a verdict per skill — Keep / Improve / Update / Retire / Merge into X / Retire-and-absorb, or Out of scope for a skill symlinked in from someone else's tree — never a numeric score. Nothing is retired, merged or handed off until the operator confirms that skill. Two modes: full (evaluate everything) and changed (re-evaluate only changed skills, carry the rest forward).
+
+Status: active, synced one way from the author's Claude Code harness by `scripts/sync-from-local.sh`, and also shipped in the [akc-cycle](https://github.com/shimo4228/akc-cycle) plugin as `/akc-cycle:skill-stocktake`, so this repository can trail the plugin between syncs.
 
 ## Core documentation
 
 - [llms-full.txt](llms-full.txt): self-contained Q&A reference for AI agents (Project Facts, Prior Research, question-form H2 sections)
 - [README.md](README.md): human-facing narrative (install, modes, verdict criteria, requirements)
-- [SKILL.md](skills/skill-stocktake/SKILL.md): full slash-command specification — modes, four-phase flow, evaluation checklist, reason-quality rules
-- [hooks/log-skill-usage.sh](hooks/log-skill-usage.sh): bundled usage-measurement hook (Claude Code–specific; adaptable to other harnesses) with bats tests under tests/
+- [SKILL.md](skills/skill-stocktake/SKILL.md): full slash-command specification — modes, six-phase flow (Phase 0–5), evaluation checklist, reason-quality rules
+- [skills/skill-stocktake/scripts/usage_stats.py](skills/skill-stocktake/scripts/usage_stats.py): bundled usage aggregation script (Python 3.11+, standard library only, run through `uv`), tests under `skills/skill-stocktake/tests/`
+- [hooks/log-skill-usage.sh](hooks/log-skill-usage.sh): optional usage-measurement hook (Claude Code–specific; adaptable to other harnesses) with bats tests under tests/; it does not run yet, because the helper it loads, `hooks/_session-common.sh`, is not shipped
 
 ## Architecture
 
-- 5 verdicts: **Keep** (useful and current), **Improve** (worth keeping, specific fixes), **Update** (outdated tech reference), **Retire** (low quality / stale / cost-asymmetric), **Merge into X** (substantial overlap with another skill)
-- Inventory via Glob (`~/.claude/skills/*/SKILL.md` + `learned/*.md`); dependency markdown under `.venv` / `.pytest_cache` is excluded structurally because Glob targets only skill definition files
-- Hybrid evaluation split by property, not context length: deterministic checks are code-owned and unconditional (Phase 0 structural pre-pass via skill-health); per-item judgment runs in small fresh-context batches of 10–12 (attention dilutes in a loaded context — a single-context pass returned all-Keep where batches surfaced 12/73 non-Keep); set-level overlap detection is a dedicated probe (description sweep → side-by-side body reads)
+- Verdicts: **Keep** (useful and current), **Improve** (worth keeping, specific fixes), **Update** (outdated tech reference, verified), **Retire** (obsolete / cost-asymmetric / fully covered by another asset with nothing left to move), **Merge into X** (same job as another skill, with named content to move into it), **Retire-and-absorb** (contradicts the skill it defers to and never fires on its own), **Out of scope** (symlinked from someone else's tree; defects go upstream)
+- Inventory via Glob (`~/.claude/skills/*/SKILL.md`, plus project skills under `$PWD/.claude/skills/`); dependency markdown under `.venv` / `.pytest_cache` is excluded structurally because Glob targets only skill definition files
+- Hybrid evaluation split by property, not context length: deterministic checks are code-owned and unconditional (Phase 0 structural pre-pass via skill-health); per-item judgment runs in small fresh-context batches of 10–12 (attention dilutes in a loaded context — a single-context pass returned all-Keep where batches surfaced 12/73 non-Keep); set-level overlap and contradiction detection is a dedicated probe (description sweep → side-by-side body reads)
 - Lean verdict ledger: `~/.claude/skills/skill-stocktake/results.json` (`{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`), updated inline
-- Usage measurement: bundled `hooks/log-skill-usage.sh` logs `invoke` / `read` / `slash` events to `~/.claude/metrics/skill-usage.jsonl`; `slash` (user-typed /skill, added 2026-07-03) closes the blind spot where command-message injection bypasses the Skill tool and Read
-- 6 phases: Structural pre-pass → Inventory → Per-item scrutiny (parallel batches) → Overlap probe → Synthesis → Consolidation; Improve/Update verdicts hand off to a skill named `skill-creator`
+- Usage measurement: `scripts/usage_stats.py` reads `~/.claude/metrics/skill-usage.jsonl` and reports deliberate uses (`slash` + `invoke`; `read` is not use) over 14 days plus the last-used date; without the log, usage renders as `—` (unmeasured), never 0. Usage is reference evidence, never a threshold or veto. The log's writer, `hooks/log-skill-usage.sh`, does not run yet (its helper `hooks/_session-common.sh` is not shipped)
+- Residency cost: the `ctx` column (tokens each skill's listing line adds to every turn) is read once from `claude -p "/skill-doctor"` (Claude Code 2.1.269 or later, as of 2026-09-15)
+- 6 phases: Structural pre-pass → Inventory → Per-item scrutiny (parallel batches) → Overlap and contradiction probe → Synthesis → Consolidation (non-Keep verdicts confirmed one by one); Improve/Update verdicts hand off to a skill named `skill-creator`
+- Requirements: Claude Code with Glob / Read / Write / Bash and subagents; `uv` and Python 3.11+; [skill-health](https://github.com/shimo4228/skill-health) installed at `~/.claude/skills/skill-health` (the two run each other's scripts); `jq` for changed mode
 
 ## Standard reference
 
 - [Agent Skill specification](https://agentskills.io/specification): the Claude Code skill format used by this repo
-- [SkillsMP marketplace](https://agentskills.io/specification): one-step install via `/skills add`
 
 ## Improvement hand-off
 
@@ -29,9 +33,13 @@
 
 ## Sibling skills
 
+- [skill-health](https://github.com/shimo4228/skill-health): the deterministic structural scan Phase 0 runs (and the URL check); install it alongside
+- [rules-stocktake](https://github.com/shimo4228/rules-stocktake): the same kind of audit for always-loaded rules
+- [agent-stocktake](https://github.com/shimo4228/agent-stocktake): the same kind of audit for subagent definitions
 - [llms-txt-writer](https://github.com/shimo4228/llms-txt-writer): writes AI-facing docs optimized for ChatGPT / Perplexity / Gemini citation
 - [skill-comply](https://github.com/shimo4228/skill-comply): measures whether agents actually follow skill / rule definitions
 - [context-sync](https://github.com/shimo4228/context-sync): audits and fixes project documentation roles
 - [search-first](https://github.com/shimo4228/search-first): research-before-coding workflow
 - [rules-distill](https://github.com/shimo4228/rules-distill): scan installed skills, extract cross-cutting principles, and distill them into rules
 - [learn-eval](https://github.com/shimo4228/learn-eval): extract reusable patterns from sessions, self-evaluate quality, and save to the right location
+- [shimo4228](https://github.com/shimo4228/shimo4228): the author's hub, with AKC next to the other practice lines and their DOIs
