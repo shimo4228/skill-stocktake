@@ -260,7 +260,7 @@ def test_sandbox_base_agrees_with_skill_comply_runner():
     runner = (
         Path(__file__).resolve().parents[2] / "skill-comply" / "scripts" / "runner.py"
     ).read_text(encoding="utf-8")
-    canon = re.search(r'^SANDBOX_BASE = Path\("(.*)"\)$', runner, re.MULTILINE)
+    canon = re.search(r'^SANDBOX_BASE = Path\("([^"]*)"\)(?:\s+#.*)?$', runner, re.MULTILINE)
     assert canon, "runner.py no longer declares SANDBOX_BASE in the pinned form"
     assert usage_stats.SANDBOX_BASE == canon.group(1)
 
