@@ -1,6 +1,6 @@
 # skill-stocktake
 
-> A Claude Code skill (MIT) that audits all installed Claude skills for quality. It combines a deterministic structural pre-pass, per-skill scrutiny in small fresh-context subagent batches (with unconditional reference verification), and a dedicated cross-skill overlap probe, and applies AI holistic judgment to propose a verdict per skill — Keep / Improve / Update / Retire / Merge into X / Retire-and-absorb, or Out of scope for a skill symlinked in from someone else's tree — never a numeric score. Nothing is retired, merged or handed off until the operator confirms that skill. Two modes: full (evaluate everything) and changed (re-evaluate only changed skills, carry the rest forward).
+> A Claude Code skill (MIT) that audits all installed Claude skills for quality. It combines a deterministic structural pre-pass, per-skill scrutiny in small fresh-context subagent batches (with unconditional reference verification), and a dedicated cross-skill overlap probe, and applies AI holistic judgment to propose a verdict per skill — Keep / Improve / Update / Retire / Merge into X / Retire-and-absorb, or Out of scope for a skill symlinked in from someone else's tree — never a numeric score. Nothing is retired, merged or handed off until the operator approves the report. Two modes: full (evaluate everything) and changed (re-evaluate only changed skills, carry the rest forward).
 
 Status: active, synced one way from the author's Claude Code harness by `scripts/sync-from-local.sh`, and also shipped in the [akc-cycle](https://github.com/shimo4228/akc-cycle) plugin as `/akc-cycle:skill-stocktake`, so this repository can trail the plugin between syncs.
 
@@ -18,9 +18,9 @@ Status: active, synced one way from the author's Claude Code harness by `scripts
 - Inventory via Glob (`~/.claude/skills/*/SKILL.md`, plus project skills under `$PWD/.claude/skills/`); dependency markdown under `.venv` / `.pytest_cache` is excluded structurally because Glob targets only skill definition files
 - Hybrid evaluation split by property, not context length: deterministic checks are code-owned and unconditional (Phase 0 structural pre-pass via skill-health); per-item judgment runs in small fresh-context batches of 10–12 (attention dilutes in a loaded context — a single-context pass returned all-Keep where batches surfaced 12/73 non-Keep); set-level overlap and contradiction detection is a dedicated probe (description sweep → side-by-side body reads)
 - Lean verdict ledger: `~/.claude/skills/skill-stocktake/results.json` (`{evaluated_at, skills:{name:{path,verdict,reason,mtime}}}`), updated inline
-- Usage measurement: `scripts/usage_stats.py` reads `~/.claude/metrics/skill-usage.jsonl` and reports deliberate uses (`slash` + `invoke`; `read` is not use) over 14 days plus the last-used date; without the log, usage renders as `—` (unmeasured), never 0. Usage is reference evidence, never a threshold or veto. The log's writer, `hooks/log-skill-usage.sh`, does not run yet (its helper `hooks/_session-common.sh` is not shipped)
+- Usage measurement: `scripts/usage_stats.py` reads `~/.claude/metrics/skill-usage.jsonl` and reports deliberate uses (`slash` + `invoke`; `read` is not use) over 14 days plus the last-used date; without the log, usage renders as `—` (unmeasured), never 0. Usage is reference evidence, never a threshold or veto; low deliberate use nominates a Retire candidate, and the content decides the verdict. The log's writer, `hooks/log-skill-usage.sh`, does not run yet (its helper `hooks/_session-common.sh` is not shipped)
 - Residency cost: the `ctx` column (tokens each skill's listing line adds to every turn) is read once from `claude -p "/skill-doctor"` (Claude Code 2.1.269 or later, as of 2026-09-15)
-- 6 phases: Structural pre-pass → Inventory → Per-item scrutiny (parallel batches) → Overlap and contradiction probe → Synthesis → Consolidation (non-Keep verdicts confirmed one by one); Improve/Update verdicts hand off to a skill named `skill-creator`
+- 6 phases: Structural pre-pass → Inventory → Per-item scrutiny (parallel batches) → Overlap and contradiction probe → Synthesis → Report and apply (one report, one approval, then the changes); Improve/Update verdicts hand off to a skill named `skill-writer`
 - Requirements: Claude Code with Glob / Read / Write / Bash and subagents; `uv` and Python 3.11+; [skill-health](https://github.com/shimo4228/skill-health) installed at `~/.claude/skills/skill-health` (the two run each other's scripts); `jq` for changed mode
 
 ## Standard reference
@@ -29,7 +29,7 @@ Status: active, synced one way from the author's Claude Code harness by `scripts
 
 ## Improvement hand-off
 
-- A skill named `skill-creator` is the improvement engine; skill-stocktake hands off Improve/Update verdicts to it with the failed screening questions. The author's [skill-creator](https://github.com/shimo4228/akc-cycle/tree/main/skills/skill-creator) ships in the akc-cycle plugin, and the SKILL.md cites its §3 (writing guidance) and §4 (the shared screening questions).
+- A skill named `skill-writer` is the improvement engine; skill-stocktake hands off Improve/Update verdicts to it with the failed screening questions. The author's [skill-writer](https://github.com/shimo4228/akc-cycle/tree/main/skills/skill-writer) ships in the akc-cycle plugin, and the SKILL.md cites its §3 (writing guidance) and §4 (the shared screening questions).
 
 ## Sibling skills
 

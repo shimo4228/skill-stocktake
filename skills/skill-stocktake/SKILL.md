@@ -1,6 +1,6 @@
 ---
 name: skill-stocktake
-description: "Audit the installed skills and decide which to keep, improve, merge or retire. Use when taking stock of the skill library (skill の棚卸し). For writing or revising one skill, use skill-creator."
+description: "Audit the installed skills and decide which to keep, improve, merge or retire. Use when taking stock of the skill library (skill の棚卸し). For writing or revising one skill, use skill-writer."
 license: MIT
 metadata:
   author: shimo4228
@@ -13,29 +13,29 @@ origin: shimo4228
 
 Evaluate installed skills and assign each a verdict: `Keep / Improve / Update / Retire /
 Merge`, plus `Out of scope` for skills this harness does not own (Phase 0). This skill
-does NOT do the improving — once it has a verdict, it **hands off to skill-creator (the
+does NOT do the improving — once it has a verdict, it **hands off to skill-writer (the
 improvement engine)**. That boundary is the point: stocktake is the quality gate,
-skill-creator is the fixer.
+skill-writer is the fixer.
 
 > Design note. Per-item quality/freshness and set-level existence/overlap are
 > different properties. Deterministic checks are code-owned and unconditional;
 > per-item judgment gets narrow, fresh contexts; set-level judgment gets a light
 > description sweep with targeted deep reads.
 
-**Roots.** `<harness>` below is the harness this audit covers: `~/.claude` by default, or a repository's `.claude/` when skill `harness-stocktake` runs in project mode (its Roots section maps the paths and names the evidence that is `n/a` there).
+**Roots.** `<harness>` below is the harness this audit covers: `~/.claude` by default, or a repository's `.claude/` when skill `harness-stocktake` runs in project mode (its Roots section maps the paths, names the evidence that is `n/a` there, and says which convention checks apply). The ledger `<ledger>` belongs to that harness: `${CLAUDE_SKILL_DIR}/results.json` when this skill's directory is inside `<harness>` (the harness carries its own copy of the skill), else `<harness>/stocktake/skill-stocktake.json` (an installed plugin, or project mode). Either way it is committed with the harness's other changes on the apply branch.
 
 ## Modes (`$ARGUMENTS`)
 
 | Argument | Behavior |
 |----------|----------|
 | none / `full` | Evaluate every skill (default) |
-| `changed` | Re-evaluate only skills whose `SKILL.md` mtime is newer than `results.json`'s `evaluated_at`; carry the rest forward from the ledger. Phase 0 and Phase 3 still run over the full set (structural debt, overlap, and contradiction are set properties) |
+| `changed` | Re-evaluate only skills whose `SKILL.md` mtime is newer than `<ledger>`'s `evaluated_at`; carry the rest forward from the ledger. Phase 0 and Phase 3 still run over the full set (structural debt, overlap, and contradiction are set properties) |
 
 `changed` detects changes inline (no script):
 > Paths below start at `${CLAUDE_SKILL_DIR}`, the directory holding this SKILL.md; an agent that does not substitute the variable reads it as that directory.
 
 ```bash
-find <harness>/skills -name SKILL.md -newermt "$(jq -r .evaluated_at "${CLAUDE_SKILL_DIR}/results.json")"
+find <harness>/skills -name SKILL.md -newermt "$(jq -r .evaluated_at "<ledger>")"
 ```
 
 ## Phase 0 — Structural pre-pass (deterministic, code-owned)
@@ -43,10 +43,12 @@ find <harness>/skills -name SKILL.md -newermt "$(jq -r .evaluated_at "${CLAUDE_S
 Run BEFORE any LLM judgment. These checks never ride on per-item attention:
 
 1. **skill-health scan** — dangling references / missing artifacts across the library
-   (run its scanner per the `skill-health` skill's SKILL.md). Mandatory, not
-   optional: this is the structural layer of Curate — code enumerates the debt,
+   (run its scanner per the `skill-health` skill's SKILL.md when it is installed next to this
+   one; otherwise do the same three checks — paths a SKILL.md names that do not exist, skill
+   names it points to that are not installed, skill directories that are symlinks — with
+   Glob / Grep / Read). Mandatory, not optional: this is the structural layer of Curate — code enumerates the debt,
    judgment decides — and judgment-owned checks let exactly these defects through.
-2. **Ledger hygiene** — for every `results.json` entry: the path must exist on disk and
+2. **Ledger hygiene** — for every `<ledger>` entry: the path must exist on disk and
    the key must follow the canonical rule below. Dedup violations (same path under two
    keys → keep the canonical key, delete the duplicate). Entries whose path no longer
    exists are removed (note them in the report as retired-from-disk).
@@ -69,8 +71,8 @@ Enumerate skill definition files with Glob (no script needed):
 - `<harness>/skills/*/SKILL.md`
 - if cwd has `.claude/skills/`, also `{cwd}/.claude/skills/*/SKILL.md` (project skills)
 
-**Canonical ledger keys**: one key per skill directory name, matching the path on disk
-(ADR-0047). A rule or skill referencing a name in prose does NOT make it a skill.
+**Canonical ledger keys**: one key per skill directory name, matching the path on disk.
+A rule or skill referencing a name in prose does NOT make it a skill.
 
 **Usage evidence** (parent-owned; batch agents never see it). Step 0 — run the script and
 transcribe the numbers; do not re-derive them by hand:
@@ -84,8 +86,8 @@ JSON out, exit 0 always: `counts` (per skill — `deliberate` / `slash` / `invok
 (how many rows each correction removed). The four corrections that decide whether the
 number means anything — the event-type split, the two sandbox exclusions, and the
 real-span label — live in the script's docstring together with their measured effect on
-the real log. **Do not re-implement them as a jq one-liner here** (ADR-0052): the
-`verify-bootstrap` case is why — 2 apparent uses, 0 after correction.
+the real log. **Do not re-implement them as a jq one-liner here**: one skill showed
+2 apparent uses and 0 after correction.
 
 Two readings the script hands you but cannot make for you:
 
@@ -96,13 +98,13 @@ Two readings the script hands you but cannot make for you:
 
 **Reference-URL evidence** (parent-owned for the same reason, plus one of its own: Phase 2
 runs batch agents *in parallel*, and `fetch named URLs` inside each of them is a burst
-against the same hosts — the shape the stop-and-report section of `rules/common/boundary.md` names). Check every URL
-the library names once, serially, here (the scripts live in the sibling `skill-health` skill, when it is
-installed next to this one):
+against the same hosts — the pattern rate limiters punish). Check every URL
+the library names once, serially, here (the scripts live in the sibling `skill-health` skill, which the
+plugin ships next to this one; when it is not installed, the URLs are `n/a` evidence):
 
 ```bash
 set -o pipefail   # without it a producer crash reads as "0 dead links, all healthy"
-uv run --frozen --project "${CLAUDE_SKILL_DIR}/../skill-health" python -m scripts.scan_refs --external-urls |
+uv run --frozen --project "${CLAUDE_SKILL_DIR}/../skill-health" python -m scripts.scan_refs <harness>/skills --external-urls |
   uv run --frozen --project "${CLAUDE_SKILL_DIR}/../skill-health" python -m scripts.url_liveness --urls-from -
 ```
 
@@ -119,7 +121,7 @@ remainder in this session.
 
 **Residency-cost evidence** (parent-owned, once per audit). The substrate's own
 report is the only instrument that measures what a skill's *listing line* costs every
-turn — the number RFC-0017 / RFC-0018 argue about. Run it from the parent, once,
+turn. Run it from the parent, once,
 from the repo cwd when project skills are in scope:
 
 ```bash
@@ -178,7 +180,7 @@ The same framing goes to the Phase 3 agent.
 Each batch agent applies, per skill:
 
 **Stage 1 — binary screen.** Explicit Yes/No per item; surface only the No answers
-(these six questions are the canonical set — `skill-creator` §4 reuses them for its
+(these six questions are the canonical set — `skill-writer` §4 reuses them for its
 creation-time draft gate by reference, not by copy):
 
 - [ ] Actionability: concrete steps/commands/examples you can act on?
@@ -197,10 +199,10 @@ creation-time draft gate by reference, not by copy):
   Read the skill's `MAINTENANCE.md` when it exists: it holds the reasons and history the
   body leaves out, and a claim there can be as stale as one in the body.
 - [ ] Hygiene: is the body free of bloat — trivial prohibition lists, repeated emphasis,
-  and step-by-step recitals that could fold into a principle (the skill-creator §3 writing guidance)?
+  and step-by-step recitals that could fold into a principle (the skill-writer §3 writing guidance)?
   Do NOT fold greppable detection terms, self-enforcing prohibitions, or numeric
-  thresholds — abstraction destroys their function (ADR-0058 rejected uniform
-  shortening for exactly this). Bodies grow after creation; this question is the
+  thresholds — abstraction destroys their function, so uniform shortening is
+  not the goal. Bodies grow after creation; this question is the
   standing check the creation-time gate cannot repeat. Also: does the body run on its own —
   no value or rule needed to act is left to a file outside the skill directory (an ADR, a
   rule section)? A parenthetical ADR number that only names *why* is provenance, not
@@ -208,13 +210,13 @@ creation-time draft gate by reference, not by copy):
 - [ ] Description audit: is the description free of standing instruction text — NOT-for
   routing, "Use PROACTIVELY"-style fire directives, mentions of other skills — beyond
   stating what the skill is for and when to reach for it? A listed description resides
-  in the system prompt every session as an unaudited instruction layer (RFC-0018).
+  in the system prompt every session as an unaudited instruction layer.
   Quote each instruction sentence found (semantic judgment, not regex); do NOT judge
   its effectiveness — the parent joins quotes with usage and residency cost at
   synthesis.
 
 **Stocktake-only existence pass (every item, including Keep-bound skills).** This is
-separate from the canonical six-question quality screen above, which `skill-creator`
+separate from the canonical six-question quality screen above, which `skill-writer`
 reuses. Answer both questions explicitly:
 
 - [ ] Standalone value: if this file disappeared, would the library lose a user job that
@@ -231,7 +233,7 @@ or part of a documented layer.
 skill-specific atomic yes/no questions that try to **refute the draft verdict** before
 finalizing it. Answer each with one line of evidence (file read, path check, WebSearch).
 A refuted defect → fall back toward Keep. A confirmed defect → the No answers become
-the concrete improvement list handed to skill-creator (Improve/Update) or the removal
+the concrete improvement list handed to skill-writer (Improve/Update) or the removal
 rationale (Retire).
 
 Evaluation is **holistic judgment, not a numeric rubric** — binary answers are evidence
@@ -296,8 +298,8 @@ before deletion.
 Merge Phase 2 verdicts, Phase 3 overlap / contradiction verdicts, and parent-owned usage data:
 
 - **Content owns the verdict; usage is reference evidence only.** Render the 14-day
-  deliberate-use count and last-used date; usage is never a prerequisite, veto,
-  threshold, or automatic candidate trigger.
+  deliberate-use count and last-used date; usage is never a prerequisite or veto. Low
+  deliberate use nominates a Retire candidate, and the content decides its verdict.
 - **Retire content-first.** A skill can be Retire regardless of usage when (a) its
   workflow or underlying premise is obsolete, (b) another asset actually absorbs its
   user job and no standalone residue remains, or (c) it is too thin, non-actionable, or
@@ -313,15 +315,15 @@ Merge Phase 2 verdicts, Phase 3 overlap / contradiction verdicts, and parent-own
   prices selection cost alone and leaves drift and maintenance cost unpaid, the second is
   a pointer, which is a claim and not evidence of use. For a reference-style skill with
   zero invokes, pressure-test existence with its **organic reads** — read events in
-  `~/.claude/metrics/skill-usage.jsonl` with audit days excluded (this audit's
+  the usage log (`<harness>/metrics/skill-usage.jsonl`, when the setup keeps one) with audit days excluded (this audit's
   `evaluated_at` and any generation-audit / sub-audit dates), since a stocktake reading its
   own targets registers as reads. A few organic reads that stop months back is evidence the
-  file is no longer functioning as a reference (ADR-0068).
+  file is no longer functioning as a reference.
 - **Description-audit quotes join usage and residency cost here.** An instruction
   sentence whose aim (self-firing, misfire routing) the deliberate-use record does not
   support is a removal candidate: fold it into the body or an existing rule. The
   `context` column prices the candidate — a candidate with nonzero `context` and zero
-  deliberate use is the RFC-0017 fold case (the fold recipe is skill-health Phase 3, Utility), and a
+  deliberate use is the fold case (the fold recipe is skill-health Phase 3, Utility), and a
   skill already at `-` has nothing left to fold. A
   supported trigger surface is left alone (do not strip descriptions that demonstrably
   fire). Residency cost is a price, not a verdict input: it orders the fold candidates,
@@ -355,8 +357,8 @@ contract's Phases 2–5 with its own items. Each item carries, by verdict:
 - **Retire / Merge / Retire-and-absorb**: `reason` = the specific defect and what covers the
   same need instead; `change` = the deletion, or the residue to move and its target; `impact` =
   dependent skills, rule pointers, MEMORY references
-- **Improve / Update**: `change` = the skill-creator intent packet (target skill, sections to
-  change, the No-answer list). Application runs skill-creator's report path; stocktake does not
+- **Improve / Update**: `change` = the skill-writer intent packet (target skill, sections to
+  change, the No-answer list). Application runs skill-writer's report path; stocktake does not
   do the improvement work itself
 - **Keep / Out of scope**: `reason` only
 - **Many Retires for one reason** (a bundled pack of generic skills the repo's work never calls):
@@ -367,7 +369,7 @@ Retire → Merge → Improve / Update → Keep, take one approval with the autho
 apply.
 
 **Update the ledger** on the apply branch, in the same commit as the changes: Read
-`results.json` → merge this run's verdicts (an item the author skipped keeps its verdict with
+`<ledger>` → merge this run's verdicts (an item the author skipped keeps its verdict with
 `"skipped": true`) → Write it back (`evaluated_at` = real UTC from
 `date -u +%Y-%m-%dT%H:%M:%SZ`). In `changed` mode, preserve the prior verdicts of skills you did
 not re-evaluate.
@@ -389,14 +391,14 @@ the **No answers from the binary screen / pressure-test** (question + one-line e
   to reach ~150 lines."`
 - **Keep** (mtime-only change in `changed` mode): restate the original rationale.
 
-## results.json (lean ledger)
+## Ledger (`<ledger>`, lean)
 
 ```json
 {
   "evaluated_at": "2026-06-24T11:09:00Z",
   "skills": {
     "<skill-name>": {
-      "path": "~/.claude/skills/<name>/SKILL.md",
+      "path": "<harness>/skills/<name>/SKILL.md",
       "verdict": "Keep",
       "reason": "...",
       "mtime": "2026-01-15T08:30:00Z"
@@ -406,18 +408,17 @@ the **No answers from the binary screen / pressure-test** (question + one-line e
 ```
 
 A ledger for verdict history and the last-audit timestamp only. Update it inline with
-Read/Write, not a script. Global skills only (project skills are read fresh from cwd,
-not cached here). Phase 0's hygiene rules (canonical keys, existing paths) are part of
+Read/Write, not a script. One ledger per audited harness. Phase 0's hygiene rules (canonical keys, existing paths) are part of
 every write.
 
 ## Related
 
-- `skill-creator` — the improvement engine; hand off Improve/Update work to it.
+- `skill-writer` — the improvement engine; hand off Improve/Update work to it.
 - `skill-health` — the deterministic structural layer (dangling references, ownership,
   the description-fold recipe).
-- `rules-stocktake` — the same audit for `~/.claude/rules/` (residency cost instead of
+- `rules-stocktake` — the same audit for `<harness>/rules/` (residency cost instead of
   usage).
-- `agent-stocktake` — the third sibling, for `~/.claude/agents/` (hybrid cost model:
+- `agent-stocktake` — the third sibling, for `<harness>/agents/` (hybrid cost model:
   description = residency, body = invocation).
 - `generation-audit` — on a model-generation change, collects runtime-layer evidence
   (conflict / redundancy) and `/claude-api prompt-audit` findings, and hands the skills slice to Phase 4 synthesis as
